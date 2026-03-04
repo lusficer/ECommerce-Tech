@@ -4,10 +4,8 @@ import { ArrowRight } from 'lucide-react';
 export default function HeroSection() {
   return (
     <section className="w-full">
-      {/* Đổi breakpoint từ lg xuống md để tránh rớt dòng ở màn hình vừa */}
       <div className="grid grid-cols-1 md:grid-cols-12 gap-5 md:h-[500px]">
         
-        {/* Left: Large Banner (Takes 8 columns) */}
         <div className="md:col-span-8 relative rounded-3xl overflow-hidden bg-white shadow-sm border border-slate-200 group h-[400px] md:h-full flex flex-col justify-center p-8 md:p-12 cursor-pointer hover:shadow-md transition-shadow">
           <div className="absolute inset-0 bg-gradient-to-br from-slate-50 to-slate-100 z-0"></div>
           

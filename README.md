@@ -1,8 +1,8 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+Productify is a modern SaaS landing page built with [Next.js](https://nextjs.org) and Tailwind CSS. This repository contains the source code for the landing site.
 
 ## Getting Started
 
-First, run the development server:
+First, run the development server to preview the landing page:
 
 ```bash
 npm run dev
@@ -16,7 +16,7 @@ bun dev
 
 Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+You can customize the hero, features, and calls‑to‑action by editing `app/page.tsx`. Changes are reflected instantly during development.
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 

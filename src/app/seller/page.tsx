@@ -1,184 +1,242 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react'; // 1. Thêm useRef
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
 import { 
-  Store, Package, ShoppingBag, TrendingUp, 
-  Plus, Settings, Star, ShieldCheck, Loader2, CheckCircle2, MapPin, Camera, X
+  Store, Package, TrendingUp, Plus, Settings, ShieldCheck, 
+  Loader2, Search, CheckCircle2, Percent, Edit, Trash2
 } from 'lucide-react';
 
 export default function SellerDashboard() {
   const router = useRouter();
-  const fileInputRef = useRef<HTMLInputElement>(null); // 2. Ref để kích hoạt ô chọn file ẩn
 
   const [loading, setLoading] = useState(true);
-  const [isAuthorized, setIsAuthorized] = useState(false);
+  const [role, setRole] = useState<'VENDOR' | 'MANAGER' | null>(null);
   const [userId, setUserId] = useState('');
 
   // States UI & Shop Data
   const [activeTab, setActiveTab] = useState('dashboard');
   const [hasShop, setHasShop] = useState(false);
-  const [shopData, setShopData] = useState({
-    shopId: '',
-    shopName: '',
-    address: '',
-    description: '',
-    logoUrl: '', // Đây là link ảnh
-    status: ''
-  });
-
+  const [shopData, setShopData] = useState({ shopId: '', shopName: '', address: '', description: '', logoUrl: '', status: '' });
   const [saving, setSaving] = useState(false);
+
+  // States Products & Approval
+  const [myProducts, setMyProducts] = useState<any[]>([]);
+  const [approvalQueue, setApprovalQueue] = useState<any[]>([]);
+  
+  // States Form Xử lý Thêm/Sửa
+  const [showProductForm, setShowProductForm] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null); // Lưu ID nếu đang ở chế độ Edit
+  const [productForm, setProductForm] = useState({ targetShopId: '', name: '', categoryId: 'CAT_PHONE', price: 0, discountPercentage: 0, description: '', imageUrl: '' });
+
+  // States Vendor Search Shop
+  const [shopSearchQuery, setShopSearchQuery] = useState('');
+  const [shopSearchResults, setShopSearchResults] = useState<any[]>([]);
+  const [isSearchingShop, setIsSearchingShop] = useState(false);
 
   useEffect(() => {
     const token = localStorage.getItem('accessToken');
     const storedUserId = localStorage.getItem('userId');
 
-    if (!token || !storedUserId || !storedUserId.startsWith('SHOP_MNG')) {
-      toast.error('Bạn không có quyền truy cập trang này!');
-      router.push('/');
+    if (!token || !storedUserId) {
+      toast.error('Please log in!');
+      router.push('/login');
       return;
     }
 
     setUserId(storedUserId);
-    setIsAuthorized(true);
-    fetchShopData(storedUserId, token);
-  }, [router]);
-
-  // Gọi API lấy dữ liệu Shop
-  const fetchShopData = async (ownerId: string, token: string) => {
-    try {
-      const response = await fetch(`http://localhost:8082/api/shops/owner/${ownerId}`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      if (response.ok) {
-        const shops = await response.json();
-        if (shops && shops.length > 0) {
-          setHasShop(true);
-          const myShop = shops[0];
-          setShopData({
-            shopId: myShop.shopId || '',
-            shopName: myShop.shopName || '',
-            address: myShop.address || '',
-            description: myShop.description || '',
-            logoUrl: myShop.logoUrl || '', // Backend trả về link ảnh
-            status: myShop.status || 'ACTIVE'
-          });
-        } else {
-          setHasShop(false);
-        }
-      }
-    } catch (error) {
-      console.error("Lỗi khi fetch shop:", error);
-    } finally {
+    if (storedUserId.startsWith('SHOP_MNG')) {
+      setRole('MANAGER');
+      fetchShopData(storedUserId, token, 'MANAGER');
+    } else if (storedUserId.startsWith('VEND')) {
+      setRole('VENDOR');
+      // Mockup Vendor quản lý hàng gửi vào SHOP_001 lúc đầu load
+      fetchVendorProducts('SHOP_001', token);
       setLoading(false);
     }
+  }, [router]);
+
+  // --- API FETCH LÝ DANH SÁCH ---
+  const fetchShopData = async (ownerId: string, token: string, currentRole: string) => {
+    try {
+      const res = await fetch(`http://localhost:8082/api/shops/owner/${ownerId}`, { headers: { 'Authorization': `Bearer ${token}` } });
+      if (res.ok) {
+        const shops = await res.json();
+        if (shops && shops.length > 0) {
+          setHasShop(true);
+          setShopData(shops[0]);
+          if(currentRole === 'MANAGER') {
+            fetchApprovalQueue(token, shops[0].shopId);
+            fetchManagerProducts(shops[0].shopId, token); // Gọi đúng API của Manager
+          }
+        }
+      }
+    } catch (error) { console.error(error); } finally { setLoading(false); }
   };
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    setShopData({ ...shopData, [e.target.name]: e.target.value });
+  const fetchApprovalQueue = async (token: string, currentShopId: string) => {
+    try {
+      const res = await fetch(`http://localhost:8083/api/manager/products/queue`, { headers: { 'Authorization': `Bearer ${token}`, 'SHOP-ID': currentShopId } });
+      if (res.ok) setApprovalQueue(await res.json());
+    } catch (error) {}
   };
 
-  // --- 3. XỬ LÝ CHỌN VÀ PREVIEW ẢNH (DÙNG BASE64 ĐỂ MOCKUP) ---
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Manager lấy sản phẩm của Shop
+  const fetchManagerProducts = async (shopId: string, token: string) => {
+    try {
+      const res = await fetch(`http://localhost:8083/api/manager/products`, { headers: { 'Authorization': `Bearer ${token}`, 'SHOP-ID': shopId } });
+      if (res.ok) setMyProducts(await res.json());
+    } catch (error) {}
+  };
+
+  // Vendor lấy sản phẩm của mình
+  const fetchVendorProducts = async (shopId: string, token: string) => {
+    try {
+      const res = await fetch(`http://localhost:8083/api/vendor/products`, { headers: { 'Authorization': `Bearer ${token}`, 'X-Shop-Id': shopId } });
+      if (res.ok) setMyProducts(await res.json());
+    } catch (error) {}
+  };
+
+  // --- API TÌM KIẾM SHOP ---
+  const searchShops = async (keyword: string) => {
+    setShopSearchQuery(keyword);
+    if (!keyword.trim()) { 
+      setShopSearchResults([]); 
+      return; 
+    }
+    
+    setIsSearchingShop(true);
+    const token = localStorage.getItem('accessToken'); // Lấy token
+
+    try {
+      const res = await fetch(`http://localhost:8082/api/shops/search?keyword=${encodeURIComponent(keyword)}`, {
+        headers: { 
+          'Authorization': `Bearer ${token}`
+        }
+      }); 
+      
+      if (res.ok) {
+        const data = await res.json();
+        setShopSearchResults(data);
+      } else {
+        console.error("Lỗi từ backend:", await res.text());
+      }
+    } catch (error) { 
+      console.error("Lỗi gọi API Search:", error); 
+    } finally { 
+      setIsSearchingShop(false); 
+    }
+  };
+
+  // --- HÀNH ĐỘNG MANAGER DUYỆT HÀNG ---
+  const handleReviewProduct = async (productId: string, isApproved: boolean) => {
+    let comments = "Approved"; let discount = 0;
+    if (!isApproved) {
+      const reason = prompt("Enter reason for rejection:");
+      if (!reason) return; comments = reason;
+    } else {
+      const discountInput = prompt("Enter discount percentage (0-99):", "0");
+      if (discountInput === null) return; discount = parseInt(discountInput) || 0;
+    }
+    const token = localStorage.getItem('accessToken');
+    try {
+      const res = await fetch(`http://localhost:8083/api/manager/products/${productId}/review`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ managerId: userId, approved: isApproved, comments, discountPercentage: discount })
+      });
+      if (!res.ok) throw new Error('Action failed');
+      toast.success(isApproved ? `Product Approved with ${discount}% discount!` : 'Product Rejected!');
+      fetchApprovalQueue(token!, shopData.shopId); 
+      fetchManagerProducts(shopData.shopId, token!);
+    } catch (error: any) { toast.error(error.message); }
+  };
+
+  // --- HÀNH ĐỘNG THÊM/SỬA SẢN PHẨM ---
+  const handleProductSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSaving(true);
+    const token = localStorage.getItem('accessToken');
+    const finalShopId = role === 'MANAGER' ? shopData.shopId : productForm.targetShopId;
+
+    if (!finalShopId) { toast.error('Please select a partner shop!'); setSaving(false); return; }
+
+    const url = editingId 
+      ? `http://localhost:8083/api/${role?.toLowerCase()}/products/${editingId}` // Gọi API Update
+      : `http://localhost:8083/api/vendor/products`; // Gọi API Create
+
+    const method = editingId ? 'PUT' : 'POST';
+
+    try {
+      const res = await fetch(url, {
+         method: method,
+         headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json', 'SHOP-ID': finalShopId },
+         body: JSON.stringify({...productForm, shopId: finalShopId})
+      });
+      if(!res.ok) throw new Error('Failed to save product!');
+      
+      toast.success(editingId ? 'Product updated successfully!' : 'Product submitted successfully!');
+      setShowProductForm(false);
+      
+      // Reload danh sách
+      if(role === 'MANAGER') fetchManagerProducts(shopData.shopId, token!);
+      else fetchVendorProducts(finalShopId, token!);
+    } catch (err: any) { toast.error(err.message); } finally { setSaving(false); }
+  };
+
+  // Mở Form để Edit
+  const openEditForm = (product: any) => {
+    setEditingId(product.productId);
+    setProductForm({
+      targetShopId: product.shopId,
+      name: product.name,
+      categoryId: product.categoryId || 'CAT_PHONE',
+      price: product.price,
+      discountPercentage: product.discountPercentage || 0,
+      description: product.description || '',
+      imageUrl: product.imageUrl || ''
+    });
+    setShopSearchQuery(product.shopId); // Set tạm ID shop cho UI Vendor
+    setShowProductForm(true);
+  };
+
+  // Mở Form để Add
+  const openAddForm = () => {
+    setEditingId(null);
+    setProductForm({ targetShopId: '', name: '', categoryId: 'CAT_PHONE', price: 0, discountPercentage: 0, description: '', imageUrl: '' });
+    setShopSearchQuery('');
+    setShowProductForm(true);
+  };
+
+  // --- HÀNH ĐỘNG XÓA SẢN PHẨM ---
+  const handleDeleteProduct = async (productId: string) => {
+    if (!confirm("Are you sure you want to delete this product?")) return;
+    const token = localStorage.getItem('accessToken');
+    try {
+      const res = await fetch(`http://localhost:8083/api/${role?.toLowerCase()}/products/${productId}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if(!res.ok) throw new Error('Failed to delete');
+      toast.success('Product deleted!');
+      // Reload danh sách
+      if(role === 'MANAGER') fetchManagerProducts(shopData.shopId, token!);
+      else fetchVendorProducts(productForm.targetShopId || 'SHOP_001', token!);
+    } catch (error: any) { toast.error(error.message); }
+  };
+
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      // Kiểm tra định dạng file
-      if (!file.type.startsWith('image/')) {
-        toast.error('Vui lòng chọn file hình ảnh (jpg, png...)');
-        return;
-      }
-      // Kiểm tra dung lượng (ví dụ < 2MB)
-      if (file.size > 2 * 1024 * 1024) {
-        toast.error('Kích thước ảnh phải nhỏ hơn 2MB!');
-        return;
-      }
-
       const reader = new FileReader();
-      reader.onloadend = () => {
-        // Cập nhật logoUrl bằng chuỗi Base64 để hiển thị xem trước
-        setShopData({ ...shopData, logoUrl: reader.result as string });
-      };
-      reader.readAsDataURL(file); // Đọc file dưới dạng Base64
+      reader.onloadend = () => setProductForm({ ...productForm, imageUrl: reader.result as string });
+      reader.readAsDataURL(file);
     }
   };
 
-  // --- 4. GỌI API TẠO MỚI SHOP (POST /api/shops?ownerId=...) ---
-  const handleCreateShop = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setSaving(true);
-    const token = localStorage.getItem('accessToken');
-
-    try {
-      const response = await fetch(`http://localhost:8082/api/shops?ownerId=${userId}`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        // Backend của bạn nhận @RequestBody UpdateShopProfileRequest (có logoUrl)
-        body: JSON.stringify({
-          shopName: shopData.shopName,
-          address: shopData.address,
-          description: shopData.description,
-          logoUrl: shopData.logoUrl // Gửi chuỗi Base64 (hoặc link ảnh) xuống
-        }),
-      });
-
-      if (!response.ok) throw new Error('Tạo Shop thất bại!');
-
-      toast.success('Tạo Shop thành công!');
-      fetchShopData(userId, token!); // Reload dữ liệu để lấy ShopId thật
-    } catch (error: any) {
-      toast.error(error.message);
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  // --- 5. GỌI API UPDATE PROFILE SHOP (PUT /api/shops/{shopId}/profile) ---
-  const handleUpdateShop = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setSaving(true);
-    const token = localStorage.getItem('accessToken');
-
-    try {
-      const response = await fetch(`http://localhost:8082/api/shops/${shopData.shopId}/profile`, {
-        method: 'PUT',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          shopName: shopData.shopName,
-          address: shopData.address,
-          description: shopData.description,
-          logoUrl: shopData.logoUrl // Gửi dữ liệu ảnh đã cập nhật xuống
-        }),
-      });
-
-      if (!response.ok) throw new Error('Cập nhật thất bại!');
-
-      toast.success('Lưu thông tin Shop thành công!');
-    } catch (error: any) {
-      toast.error(error.message);
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  if (loading || !isAuthorized) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <Loader2 className="w-10 h-10 animate-spin text-cyan-600" />
-      </div>
-    );
-  }
+  if (loading) return <div className="min-h-screen flex items-center justify-center"><Loader2 className="w-10 h-10 animate-spin text-cyan-600" /></div>;
 
   return (
     <div className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 py-8 mb-20 font-sans">
@@ -188,195 +246,254 @@ export default function SellerDashboard() {
 
       <div className="flex flex-col lg:flex-row gap-8 items-start">
         
-        {/* SIDEBAR DÀNH RIÊNG CHO SELLER (RÚT GỌN CHỈ CÒN ĐÚNG CÁI BẠN CẦN) */}
+        {/* SIDEBAR */}
         <div className="w-full lg:w-1/4 flex flex-col gap-4 sticky top-28">
           <div className="bg-slate-900 rounded-3xl p-8 text-white shadow-lg overflow-hidden relative">
-             <div className="absolute top-0 right-0 p-4 opacity-10 text-cyan-500">
-                <Store className="w-32 h-32 -mr-10 -mt-10" />
-             </div>
+             <div className="absolute top-0 right-0 p-4 opacity-10 text-cyan-500"><Store className="w-32 h-32 -mr-10 -mt-10" /></div>
              <div className="relative z-10">
-               <h2 className="text-2xl font-black mb-1">Seller Center</h2>
-               <p className="text-slate-400 text-sm font-medium">Manage your business</p>
+               <h2 className="text-2xl font-black mb-1 leading-tight">{role === 'MANAGER' ? (shopData.shopName || 'Shop Manager') : 'Vendor Portal'}</h2>
+               <p className="text-cyan-400 text-xs font-bold uppercase tracking-wider mt-2">{role}</p>
              </div>
           </div>
 
           <div className="bg-white rounded-3xl p-4 border border-slate-200 shadow-sm flex flex-col gap-1">
-            <button onClick={() => setActiveTab('dashboard')} disabled={!hasShop} className={`flex items-center gap-3 p-4 rounded-xl font-bold text-sm transition-all ${!hasShop ? 'opacity-50 cursor-not-allowed' : activeTab === 'dashboard' ? 'bg-cyan-50 text-cyan-600' : 'text-slate-600 hover:bg-slate-50'}`}>
+            <button onClick={() => {setActiveTab('dashboard'); setShowProductForm(false)}} className={`flex items-center gap-3 p-4 rounded-xl font-bold text-sm transition-all ${activeTab === 'dashboard' ? 'bg-cyan-50 text-cyan-600' : 'text-slate-600 hover:bg-slate-50'}`}>
               <TrendingUp className="w-5 h-5" /> Overview
             </button>
-            <button onClick={() => setActiveTab('products')} disabled={!hasShop} className={`flex items-center justify-between p-4 rounded-xl font-bold text-sm transition-all ${!hasShop ? 'opacity-50 cursor-not-allowed' : activeTab === 'products' ? 'bg-cyan-50 text-cyan-600' : 'text-slate-600 hover:bg-slate-50'}`}>
-              <div className="flex items-center gap-3"><Package className="w-5 h-5" /> Products</div>
+            <button onClick={() => {setActiveTab('products'); setShowProductForm(false)}} className={`flex items-center justify-between p-4 rounded-xl font-bold text-sm transition-all ${activeTab === 'products' ? 'bg-cyan-50 text-cyan-600' : 'text-slate-600 hover:bg-slate-50'}`}>
+              <div className="flex items-center gap-3"><Package className="w-5 h-5" /> {role === 'MANAGER' ? 'Shop Inventory' : 'My Products'}</div>
+              <span className="bg-slate-100 text-slate-500 py-0.5 px-2 rounded-full text-xs">{myProducts.length}</span>
             </button>
-            <div className="h-px bg-slate-100 my-2"></div>
-            <button onClick={() => setActiveTab('settings')} disabled={!hasShop} className={`flex items-center gap-3 p-4 rounded-xl font-bold text-sm transition-all ${!hasShop ? 'opacity-50 cursor-not-allowed' : activeTab === 'settings' ? 'bg-cyan-50 text-cyan-600' : 'text-slate-600 hover:bg-slate-50'}`}>
-              <Settings className="w-5 h-5" /> Shop Settings
-            </button>
+            {role === 'MANAGER' && (
+              <>
+                <button onClick={() => {setActiveTab('approval'); setShowProductForm(false)}} className={`flex items-center justify-between p-4 rounded-xl font-bold text-sm transition-all ${activeTab === 'approval' ? 'bg-cyan-50 text-cyan-600' : 'text-slate-600 hover:bg-slate-50'}`}>
+                  <div className="flex items-center gap-3"><ShieldCheck className="w-5 h-5" /> Approval Queue</div>
+                  {approvalQueue.length > 0 && <span className="bg-orange-100 text-orange-600 py-0.5 px-2 rounded-full text-xs animate-pulse">{approvalQueue.length}</span>}
+                </button>
+                <div className="h-px bg-slate-100 my-2"></div>
+                <button onClick={() => setActiveTab('settings')} className={`flex items-center gap-3 p-4 rounded-xl font-bold text-sm transition-all ${activeTab === 'settings' ? 'bg-cyan-50 text-cyan-600' : 'text-slate-600 hover:bg-slate-50'}`}>
+                  <Settings className="w-5 h-5" /> Shop Settings
+                </button>
+              </>
+            )}
           </div>
         </div>
 
-        {/* MAIN CONTENT AREA */}
+        {/* MAIN CONTENT */}
         <div className="w-full lg:w-3/4">
-          
-          {/* MÀN HÌNH CHƯA CÓ SHOP (BẮT BUỘC TẠO) */}
-          {!hasShop ? (
-            <div className="bg-white rounded-3xl p-10 border border-slate-200 shadow-sm min-h-[500px] animate-in fade-in duration-300">
-               <div className="max-w-xl mx-auto text-center">
-                 <div className="w-20 h-20 bg-cyan-50 text-cyan-600 rounded-full flex items-center justify-center mx-auto mb-6">
-                   <Store className="w-10 h-10" />
-                 </div>
-                 <h2 className="text-2xl font-black text-slate-900 mb-2">Initialize Your Shop</h2>
-                 <p className="text-slate-500 mb-8">One manager can only own one shop. Let's set up the basic information for your tech store.</p>
-                 
-                 <form className="text-left space-y-5" onSubmit={handleCreateShop}>
-                    {/* --- 6. Ô CHỌN ẢNH THÔNG MINH CHO TẠO SHOP --- */}
-                    <div className="flex flex-col items-center mb-8">
-                      <label className="block text-sm font-bold text-slate-700 mb-3 text-center">Shop Logo</label>
-                      <div 
-                        onClick={() => fileInputRef.current?.click()} // Kích hoạt chọn file
-                        className="w-28 h-28 rounded-3xl bg-slate-100 border-2 border-dashed border-slate-300 flex flex-col items-center justify-center text-slate-400 cursor-pointer hover:border-cyan-500 hover:bg-cyan-50 transition-all relative group overflow-hidden shadow-inner"
-                      >
-                        {shopData.logoUrl ? (
-                          // Hiển thị ảnh xem trước
-                          <img src={shopData.logoUrl} alt="Logo preview" className="w-full h-full object-cover" />
-                        ) : (
-                          // Hiển thị icon mặc định
-                          <>
-                            <Camera className="w-8 h-8 mb-1" />
-                            <span className="text-xs font-medium">Upload</span>
-                          </>
-                        )}
-                        {/* Lớp overlay khi hover */}
-                        <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                            <Camera className="w-6 h-6 text-white" />
-                        </div>
-                      </div>
-                      <p className="text-xs text-slate-400 mt-2">Max 2MB. JPG, PNG</p>
-                    </div>
-                    {/* Ô chọn file ẩn */}
-                    <input type="file" ref={fileInputRef} onChange={handleFileChange} accept="image/*" className="hidden" />
-
-                    <div>
-                      <label className="block text-sm font-bold text-slate-700 mb-2">Shop Name <span className="text-red-500">*</span></label>
-                      <input type="text" name="shopName" value={shopData.shopName} onChange={handleInputChange} required placeholder="Ex: TechZone Official" className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:outline-none focus:border-cyan-500 bg-slate-50 focus:bg-white text-sm" />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-bold text-slate-700 mb-2">Shop Address <span className="text-red-500">*</span></label>
-                      <input type="text" name="address" value={shopData.address} onChange={handleInputChange} required placeholder="123 Tech Street, NY" className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:outline-none focus:border-cyan-500 bg-slate-50 focus:bg-white text-sm" />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-bold text-slate-700 mb-2">Description</label>
-                      <textarea name="description" value={shopData.description} onChange={handleInputChange} rows={3} placeholder="Tell customers what you sell..." className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:outline-none focus:border-cyan-500 bg-slate-50 focus:bg-white text-sm"></textarea>
-                    </div>
-                    <button type="submit" disabled={saving} className="w-full py-3.5 bg-cyan-600 hover:bg-cyan-700 text-white font-bold rounded-xl transition-all shadow-md hover:-translate-y-0.5 flex items-center justify-center gap-2">
-                      {saving && <Loader2 className="w-5 h-5 animate-spin" />}
-                      {saving ? 'CREATING...' : 'CREATE SHOP'}
-                    </button>
-                 </form>
+          <div className="space-y-6 animate-in fade-in duration-300">
+            
+            {activeTab === 'dashboard' && (
+               <div className="bg-white rounded-3xl p-8 border border-slate-200 shadow-sm min-h-[400px]">
+                  <h3 className="text-xl font-black text-slate-900 mb-6">Welcome back!</h3>
+                  <p className="text-slate-500">Manage your operations effectively.</p>
                </div>
-            </div>
-          ) : (
-            /* MÀN HÌNH ĐÃ CÓ SHOP */
-            <div className="space-y-6 animate-in fade-in duration-300">
-              
-              {/* Header Shop rực rỡ (tái tạo Figma) */}
-              <div className="bg-cyan-600 rounded-3xl p-6 lg:p-8 text-white shadow-lg flex flex-col sm:flex-row items-center gap-6 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] bg-blend-overlay">
-                {/* HIỂN THỊ LOGO THẬT TỪ DATABASE */}
-                <div className="w-20 h-20 bg-slate-900 rounded-2xl flex items-center justify-center text-white font-black text-2xl shadow-inner relative shrink-0 overflow-hidden border-2 border-white/50">
-                   {shopData.logoUrl ? (
-                      <img src={shopData.logoUrl} alt="Shop Logo" className="w-full h-full object-cover" />
-                   ) : (
-                      // Nếu không có ảnh, dùng chữ cái đầu
-                      shopData.shopName.substring(0, 2).toUpperCase() || 'TS'
-                   )}
-                </div>
-                <div className="flex-grow text-center sm:text-left">
-                  <h1 className="text-3xl font-black flex items-center justify-center sm:justify-start gap-2">
-                    {shopData.shopName || 'TechZone Official'} <ShieldCheck className="w-5 h-5 text-green-300" />                  </h1>
-                  <p className="text-cyan-100 font-medium mt-1 flex items-center justify-center sm:justify-start gap-1"><MapPin className="w-4 h-4"/> {shopData.address || '123 Tech Street, NY'}</p>
-                </div>
-                <div className="px-4 py-2 bg-white/20 rounded-lg backdrop-blur-sm border border-white/30 font-bold tracking-widest uppercase text-sm">
-                   {shopData.status || 'ACTIVE'}
-                </div>
-              </div>
+            )}
 
-              {activeTab === 'dashboard' && (
-                 <div className="bg-white rounded-3xl p-8 border border-slate-200 shadow-sm min-h-[400px]">
-                    <h3 className="text-xl font-black text-slate-900 mb-6">Overview</h3>
-                    <p className="text-slate-500">Thống kê doanh thu và đơn hàng sẽ hiển thị ở đây.</p>
-                 </div>
-              )}
+            {/* TAB SẢN PHẨM */}
+            {activeTab === 'products' && (
+              <div className="bg-white rounded-3xl p-8 border border-slate-200 shadow-sm min-h-[600px]">
+                {!showProductForm ? (
+                  <div className="animate-in fade-in">
+                    <div className="flex items-center justify-between mb-8">
+                      <h3 className="text-xl font-black text-slate-900">{role === 'MANAGER' ? 'Shop Inventory' : 'My Product Listings'}</h3>
+                      
+                      {/* CHỈ VENDOR MỚI THẤY NÚT ADD PRODUCT */}
+                      {role === 'VENDOR' && (
+                        <button onClick={openAddForm} className="px-5 py-2.5 bg-cyan-600 hover:bg-cyan-700 text-white font-bold rounded-xl transition-all shadow-md flex items-center gap-2 text-sm">
+                          <Plus className="w-4 h-4" /> ADD PRODUCT
+                        </button>
+                      )}
+                    </div>
 
-              {/* TAB SETTINGS - CẬP NHẬT PROFILE SHOP VÀ LOGO */}
-              {activeTab === 'settings' && (
-                 <div className="bg-white rounded-3xl p-8 border border-slate-200 shadow-sm min-h-[400px] animate-in fade-in">
-                    <h3 className="text-xl font-black text-slate-900 mb-6">Shop Configuration</h3>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left border-collapse">
+                        <thead>
+                          <tr className="border-b border-slate-100 text-sm font-bold text-slate-400">
+                            <th className="pb-3">Product</th>
+                            <th className="pb-3">Price</th>
+                            <th className="pb-3">Status</th>
+                            <th className="pb-3 text-right">Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody className="text-sm font-medium text-slate-700">
+                          {myProducts.length === 0 && (
+                            <tr><td colSpan={4} className="text-center py-10 text-slate-400">No products found.</td></tr>
+                          )}
+                          {myProducts.map((p) => (
+                            <tr key={p.productId} className="border-b border-slate-50 hover:bg-slate-50">
+                              <td className="py-4 flex items-center gap-3">
+                                <div className="w-10 h-10 bg-slate-100 rounded-lg overflow-hidden shrink-0">
+                                  {p.imageUrl ? <img src={p.imageUrl} alt="" className="w-full h-full object-cover"/> : <Package className="w-5 h-5 m-2.5 text-slate-400"/>}
+                                </div>
+                                <span className="font-bold line-clamp-1">{p.name}</span>
+                              </td>
+                              <td className="py-4 font-bold text-cyan-600">${p.price}</td>
+                              <td className="py-4">
+                                <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${
+                                  p.approvalStatus === 'APPROVED' ? 'bg-green-100 text-green-700' : 
+                                  p.approvalStatus === 'REJECTED' ? 'bg-red-100 text-red-700' : 'bg-orange-100 text-orange-700'
+                                }`}>
+                                  {p.approvalStatus}
+                                </span>
+                              </td>
+                              {/* CẢ MANAGER & VENDOR ĐỀU ĐƯỢC QUYỀN SỬA/XÓA SP TRONG LIST CỦA HỌ */}
+                              <td className="py-4 text-right">
+                                <div className="flex justify-end gap-2">
+                                  <button onClick={() => openEditForm(p)} className="p-2 text-slate-400 hover:text-cyan-600 hover:bg-cyan-50 rounded-lg transition-colors"><Edit className="w-4 h-4" /></button>
+                                  <button onClick={() => handleDeleteProduct(p.productId)} className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"><Trash2 className="w-4 h-4" /></button>
+                                </div>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                ) : (
+                  // FORM THÊM/SỬA SẢN PHẨM CHUNG
+                  <div className="animate-in slide-in-from-right-8 duration-300">
+                    <button onClick={() => setShowProductForm(false)} className="text-sm font-bold text-slate-500 hover:text-cyan-600 mb-6 flex items-center gap-1">
+                      ← Back to Products
+                    </button>
+                    <h3 className="text-xl font-black text-slate-900 mb-6">
+                      {editingId ? 'Edit Product' : 'Create New Listing'}
+                    </h3>
                     
-                    <form className="space-y-5 max-w-2xl" onSubmit={handleUpdateShop}>
-                      
-                      {/* --- Ô CHỌN ẢNH THÔNG MINH CHO CẬP NHẬT --- */}
-                      <div>
-                        <label className="block text-sm font-bold text-slate-700 mb-2">Shop Logo</label>
-                        <div className="flex items-center gap-5 bg-slate-50 p-4 rounded-xl border border-slate-200 shadow-inner">
-                          {/* Nút bấm thông minh */}
-                          <div 
-                             onClick={() => fileInputRef.current?.click()} // Kích hoạt chọn file
-                             className="w-20 h-20 rounded-2xl bg-slate-100 border border-slate-300 flex flex-col items-center justify-center text-slate-400 cursor-pointer hover:border-cyan-500 hover:bg-cyan-50 transition-all relative group overflow-hidden"
-                          >
-                             {shopData.logoUrl ? (
-                               <img src={shopData.logoUrl} alt="Logo preview" className="w-full h-full object-cover" />
-                             ) : (
-                               <>
-                                 <Camera className="w-6 h-6 mb-1" />
-                                 <span className="text-[10px] font-medium">Upload</span>
-                               </>
-                             )}
-                             <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                                <Camera className="w-5 h-5 text-white" />
+                    <form className="space-y-5" onSubmit={handleProductSubmit}>
+                       <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                         
+                         {/* THANH SEARCH SHOP (CHỈ VENDOR THẤY) */}
+                         {role === 'VENDOR' && (
+                           <div className="md:col-span-2 bg-blue-50 p-4 rounded-xl border border-blue-100 relative">
+                             <label className="block text-sm font-black text-blue-900 mb-2">Search Partner Shop <span className="text-red-500">*</span></label>
+                             <div className="relative">
+                               <Search className="absolute left-3 top-3.5 w-4 h-4 text-blue-400" />
+                               <input 
+                                 type="text" 
+                                 value={shopSearchQuery} 
+                                 onChange={(e) => searchShops(e.target.value)}
+                                 placeholder="Type shop name (e.g., TechZone)..." 
+                                 className="w-full pl-9 pr-4 py-3 rounded-xl border border-blue-200 focus:border-blue-500 outline-none bg-white text-sm font-medium" 
+                               />
+                               {isSearchingShop && <Loader2 className="absolute right-3 top-3.5 w-4 h-4 animate-spin text-blue-500" />}
                              </div>
-                          </div>
-                          
-                          <div>
-                            <button type="button" onClick={() => fileInputRef.current?.click()} className="px-4 py-2 bg-white border border-slate-200 hover:bg-slate-100 text-slate-700 font-bold rounded-lg transition-all text-xs flex items-center gap-1.5 shadow-sm">
-                               <Camera className="w-3.5 h-3.5" /> CHANGE LOGO
-                            </button>
-                            <p className="text-[11px] text-slate-400 mt-2">Maximum file size: 2MB.<br/>Supported: JPG, PNG, WEBP.</p>
-                          </div>
-                        </div>
-                      </div>
-                      {/* Ô chọn file ẩn (Tái sử dụng chung) */}
-                      <input type="file" ref={fileInputRef} onChange={handleFileChange} accept="image/*" className="hidden" />
 
+                             {shopSearchResults.length > 0 && (
+                                <ul className="absolute z-20 left-4 right-4 mt-1 bg-white border border-blue-100 rounded-xl shadow-lg max-h-48 overflow-y-auto">
+                                  {shopSearchResults.map(shop => (
+                                      <li key={shop.shopId} onClick={() => {
+                                            setProductForm({...productForm, targetShopId: shop.shopId});
+                                            setShopSearchQuery(shop.shopName);
+                                            setShopSearchResults([]); 
+                                         }} className="p-3 hover:bg-blue-50 cursor-pointer border-b border-slate-50">
+                                         <div className="font-bold text-sm text-slate-800">{shop.shopName}</div>
+                                         <div className="text-xs text-slate-400">ID: {shop.shopId}</div>
+                                      </li>
+                                  ))}
+                                </ul>
+                             )}
+                             {productForm.targetShopId && (
+                               <div className="mt-2 text-xs font-bold text-green-600 flex items-center gap-1"><CheckCircle2 className="w-4 h-4" /> Selected: {productForm.targetShopId}</div>
+                             )}
+                           </div>
+                         )}
 
-                      <div>
-                        <label className="block text-sm font-bold text-slate-700 mb-2">Shop Name</label>
-                        <input type="text" name="shopName" value={shopData.shopName} onChange={handleInputChange} required className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-cyan-500 bg-slate-50 focus:bg-white text-sm" />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-bold text-slate-700 mb-2">Address</label>
-                        <input type="text" name="address" value={shopData.address} onChange={handleInputChange} required className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-cyan-500 bg-slate-50 focus:bg-white text-sm" />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-bold text-slate-700 mb-2">Description</label>
-                        <textarea name="description" value={shopData.description} onChange={handleInputChange} rows={4} className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-cyan-500 bg-slate-50 focus:bg-white text-sm"></textarea>
-                      </div>
-                      
-                      <button type="submit" disabled={saving} className="px-8 py-3.5 bg-cyan-600 hover:bg-cyan-700 text-white font-bold rounded-xl shadow-md flex items-center gap-2 mt-4 transition-all hover:-translate-y-0.5 shadow-cyan-600/20 hover:shadow-cyan-600/40">
-                        {saving && <Loader2 className="w-4 h-4 animate-spin" />}
-                        {saving ? 'SAVING...' : 'SAVE CHANGES'}
-                      </button>
+                         <div>
+                           <label className="block text-sm font-bold text-slate-700 mb-2">Product Name <span className="text-red-500">*</span></label>
+                           <input type="text" required value={productForm.name} onChange={(e)=>setProductForm({...productForm, name: e.target.value})} className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-cyan-500 outline-none bg-slate-50 focus:bg-white text-sm" />
+                         </div>
+                         <div>
+                           <label className="block text-sm font-bold text-slate-700 mb-2">Category <span className="text-red-500">*</span></label>
+                           <select value={productForm.categoryId} onChange={(e)=>setProductForm({...productForm, categoryId: e.target.value})} className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-cyan-500 outline-none bg-slate-50 focus:bg-white text-sm">
+                             <option value="CAT_PHONE">Smartphones</option>
+                             <option value="CAT_LAPTOP">Laptops</option>
+                             <option value="CAT_AUDIO">Audio</option>
+                             <option value="CAT_ACCESSORY">Accessories</option>
+                           </select>
+                         </div>
+                         <div>
+                           <label className="block text-sm font-bold text-slate-700 mb-2">Regular Price ($) <span className="text-red-500">*</span></label>
+                           <input type="number" step="0.01" required value={productForm.price} onChange={(e)=>setProductForm({...productForm, price: parseFloat(e.target.value)})} className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-cyan-500 outline-none bg-slate-50 focus:bg-white text-sm" />
+                         </div>
+                         
+                         {/* CHỈ MANAGER ĐƯỢC NHẬP DISCOUNT */}
+                         {role === 'MANAGER' && (
+                           <div>
+                             <label className="block text-sm font-bold text-slate-700 mb-2 flex items-center gap-1">Discount <Percent className="w-3.5 h-3.5"/></label>
+                             <input type="number" min="0" max="99" value={productForm.discountPercentage} onChange={(e)=>setProductForm({...productForm, discountPercentage: parseInt(e.target.value)})} className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-cyan-500 outline-none bg-slate-50 focus:bg-white text-sm" />
+                           </div>
+                         )}
+                       </div>
+                       
+                       <div>
+                         <label className="block text-sm font-bold text-slate-700 mb-2">Product Image</label>
+                         <input type="file" onChange={handleImageChange} accept="image/*" className="w-full text-sm file:mr-4 file:py-2.5 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-bold file:bg-cyan-50 file:text-cyan-700 hover:file:bg-cyan-100" />
+                       </div>
+                       
+                       <div>
+                          <label className="block text-sm font-bold text-slate-700 mb-2">Description</label>
+                          <textarea rows={4} value={productForm.description} onChange={(e)=>setProductForm({...productForm, description: e.target.value})} className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-cyan-500 outline-none bg-slate-50 focus:bg-white text-sm"></textarea>
+                       </div>
+                       <div className="pt-4 flex justify-end gap-4">
+                         <button type="submit" disabled={saving} className="px-8 py-3 bg-cyan-600 hover:bg-cyan-700 text-white font-bold rounded-xl shadow-md">
+                            {saving ? 'SAVING...' : (editingId ? 'UPDATE PRODUCT' : 'SUBMIT PRODUCT')}
+                         </button>
+                       </div>
                     </form>
-                 </div>
-              )}
+                  </div>
+                )}
+              </div>
+            )}
 
-              {/* TAB QUẢN LÝ SẢN PHẨM (MOCKUP) */}
-              {activeTab === 'products' && (
-                <div className="bg-white rounded-3xl p-8 border border-slate-200 shadow-sm min-h-[400px]">
-                   <h3 className="text-xl font-black text-slate-900 mb-6">Product Management</h3>
-                   <p className="text-slate-500 py-10 text-center border-2 border-dashed border-slate-200 rounded-2xl">Mockup quản lý sản phẩm sẽ ở đây.</p>
-                </div>
-              )}
-            </div>
-          )}
+            {/* TAB DUYỆT HÀNG (MANAGER ONLY) */}
+            {activeTab === 'approval' && role === 'MANAGER' && (
+              <div className="bg-white rounded-3xl p-8 border border-slate-200 shadow-sm min-h-[600px] animate-in fade-in">
+                <h3 className="text-xl font-black text-slate-900 mb-2">Pending Approvals</h3>
+                <p className="text-sm text-slate-500 mb-8">Review product submissions from vendors.</p>
+                {approvalQueue.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-20 text-slate-400 border-2 border-dashed border-slate-200 rounded-2xl">
+                     <ShieldCheck className="w-16 h-16 mb-4 opacity-50 text-green-500" />
+                     <p className="font-bold text-lg text-slate-500">All caught up!</p>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse">
+                      <thead>
+                        <tr className="border-b border-slate-100 text-sm font-bold text-slate-400">
+                          <th className="pb-3">Product Info</th>
+                          <th className="pb-3">Price</th>
+                          <th className="pb-3 text-right">Action</th>
+                        </tr>
+                      </thead>
+                      <tbody className="text-sm font-medium text-slate-700">
+                        {approvalQueue.map((item) => (
+                          <tr key={item.productId} className="border-b border-slate-50 hover:bg-slate-50">
+                            <td className="py-4 flex items-center gap-3">
+                              <div className="w-12 h-12 bg-slate-100 rounded-lg overflow-hidden shrink-0">
+                                {item.imageUrl ? <img src={item.imageUrl} alt="" className="w-full h-full object-cover"/> : <Package className="w-6 h-6 m-3 text-slate-400"/>}
+                              </div>
+                              <div>
+                                <p className="font-bold text-slate-900 line-clamp-1">{item.name}</p>
+                                <p className="text-[11px] text-slate-400 mt-0.5">Vendor Request</p>
+                              </div>
+                            </td>
+                            <td className="py-4 font-bold text-cyan-600">${item.price}</td>
+                            <td className="py-4 text-right">
+                              <div className="flex justify-end gap-2">
+                                <button onClick={() => handleReviewProduct(item.productId, false)} className="px-4 py-2 bg-red-50 text-red-600 hover:bg-red-500 hover:text-white rounded-lg transition-colors font-bold text-xs">Reject</button>
+                                <button onClick={() => handleReviewProduct(item.productId, true)} className="px-4 py-2 bg-green-50 text-green-600 hover:bg-green-500 hover:text-white rounded-lg transition-colors font-bold text-xs">Approve</button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>

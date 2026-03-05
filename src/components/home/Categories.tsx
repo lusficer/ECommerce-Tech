@@ -1,47 +1,105 @@
-import React from 'react';
-import { Laptop, Smartphone, Tablet, Headphones, Watch, Monitor, Gamepad, Mouse, ArrowRight } from 'lucide-react';
+'use client';
 
-const CATEGORIES = [
-  { name: 'Laptops', icon: Laptop },
-  { name: 'Phones', icon: Smartphone },
-  { name: 'Tablets', icon: Tablet },
-  { name: 'Audio', icon: Headphones },
-  { name: 'Watches', icon: Watch },
-  { name: 'Monitors', icon: Monitor },
-  { name: 'Gaming', icon: Gamepad },
-  { name: 'Accessories', icon: Mouse },
-];
+import React, { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { 
+  Laptop, Smartphone, Tablet, Headphones, Watch, 
+  Monitor, Gamepad, Mouse, ArrowRight, Package, Loader2 
+} from 'lucide-react';
+
+// Tạo bộ Map để tự động gán Icon dựa theo Category ID từ Database
+const ICON_MAP: Record<string, React.ElementType> = {
+  'CAT_LAPTOP': Laptop,
+  'CAT_PHONE': Smartphone,
+  'CAT_TABLET': Tablet,
+  'CAT_AUDIO': Headphones,
+  'CAT_ACCESSORY': Watch, // Hoặc Mouse tùy bạn chọn
+  'CAT_MONITOR': Monitor,
+  'CAT_GAMING': Gamepad,
+  'CAT_ELEC': Mouse,
+};
+
+interface CategoryDto {
+  categoryId: string;
+  name: string;
+}
 
 export default function Categories() {
+  const router = useRouter();
+  const [categories, setCategories] = useState<CategoryDto[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    // Gọi API lấy danh mục từ Product Service
+    const fetchCategories = async () => {
+      try {
+        // Lưu ý: Đảm bảo Backend của bạn đã có API này (nếu chưa, hãy tạo 1 hàm GET /api/categories đơn giản)
+        const res = await fetch('http://localhost:8083/api/categories'); 
+        if (res.ok) {
+          const data = await res.json();
+          // Lọc ra tối đa 8 category để nhét vừa layout grid
+          setCategories(data.slice(0, 8));
+        }
+      } catch (error) {
+        console.error("Lỗi khi load categories:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchCategories();
+  }, []);
+
+  const handleCategoryClick = (categoryId: string) => {
+    router.push(`/products?category=${categoryId}`);
+  };
+
   return (
-    <section className="w-full mt-16">
+    <section className="w-full mt-16 font-sans">
       {/* Title & View All */}
       <div className="flex items-center justify-between mb-8">
         <h2 className="text-2xl font-black text-slate-900 tracking-tight">Tech Categories</h2>
-        <button className="text-sm font-bold text-slate-600 hover:text-blue-600 flex items-center gap-1 transition-colors uppercase tracking-wide">
+        <button 
+          onClick={() => router.push('/products')}
+          className="text-sm font-bold text-cyan-600 hover:text-cyan-700 flex items-center gap-1 transition-colors uppercase tracking-wide"
+        >
           View All <ArrowRight className="w-4 h-4" />
         </button>
       </div>
 
       {/* Circular Icons Grid */}
-      <div className="grid grid-cols-4 md:grid-cols-8 gap-4 mb-12">
-        {CATEGORIES.map((category, index) => (
-          <div key={index} className="flex flex-col items-center gap-3 group cursor-pointer">
-            <div className="w-20 h-20 rounded-full bg-white border border-slate-200 shadow-sm flex items-center justify-center group-hover:border-blue-500 group-hover:shadow-md transition-all duration-300">
-              <category.icon className="w-8 h-8 text-slate-600 group-hover:text-blue-600 transition-colors" strokeWidth={1.5} />
-            </div>
-            <span className="text-xs font-bold text-slate-700 uppercase tracking-wide group-hover:text-blue-600 transition-colors">
-              {category.name}
-            </span>
-          </div>
-        ))}
-      </div>
+      {loading ? (
+        <div className="flex justify-center items-center h-32">
+          <Loader2 className="w-8 h-8 animate-spin text-cyan-600" />
+        </div>
+      ) : (
+        <div className="grid grid-cols-4 md:grid-cols-8 gap-4 mb-12">
+          {categories.map((category) => {
+            const IconComponent = ICON_MAP[category.categoryId] || Package; // Fallback icon
+            
+            return (
+              <div 
+                key={category.categoryId} 
+                onClick={() => handleCategoryClick(category.categoryId)}
+                className="flex flex-col items-center gap-3 group cursor-pointer"
+              >
+                <div className="w-20 h-20 rounded-full bg-white border border-slate-200 shadow-sm flex items-center justify-center group-hover:border-cyan-500 group-hover:shadow-md transition-all duration-300 group-hover:-translate-y-1">
+                  <IconComponent className="w-8 h-8 text-slate-600 group-hover:text-cyan-600 transition-colors" strokeWidth={1.5} />
+                </div>
+                <span className="text-xs font-bold text-slate-700 uppercase tracking-wide group-hover:text-cyan-600 transition-colors text-center">
+                  {category.name}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       {/* Trust Banner (12k+ active users) */}
-      <div className="w-full bg-slate-100 rounded-2xl py-6 flex items-center justify-center border border-slate-200">
-        <p className="text-lg font-medium text-slate-700">
-          Over <span className="font-bold text-slate-900">50k+ active tech users</span> trust us everyday
-        </p>
+      <div className="w-full bg-slate-100 rounded-2xl py-6 flex items-center justify-center border border-slate-200 shadow-inner">
+         <p className="text-sm font-bold text-slate-600">
+           Trusted by <span className="text-cyan-600">12,000+</span> active users globally.
+         </p>
       </div>
     </section>
   );

@@ -1,129 +1,135 @@
-import React from 'react';
-import { Heart, Star, Store, ShieldCheck, ArrowRight } from 'lucide-react';
+'use client';
 
-const PRODUCTS = [
-  {
-    id: 1,
-    title: 'MacBook Pro M3 Max 14" Space Black',
-    store: 'Apple Official Store',
-    isMall: true,
-    sold: '1.2k',
-    price: 2999.00,
-    oldPrice: 3199.00,
-    save: '200',
-    rating: 5,
-    reviews: 152,
-  },
-  {
-    id: 2,
-    title: 'Logitech MX Master 3S Wireless Mouse',
-    store: 'GearVN Store',
-    isMall: false,
-    sold: '450',
-    price: 99.00,
-    oldPrice: 120.00,
-    save: '21',
-    rating: 4.8,
-    reviews: 84,
-  },
-  {
-    id: 3,
-    title: 'Sony WH-1000XM5 Noise Cancelling',
-    store: 'Sony Center',
-    isMall: true,
-    sold: '890',
-    price: 348.00,
-    oldPrice: null,
-    save: null,
-    rating: 4.9,
-    reviews: 320,
-  },
-  {
-    id: 4,
-    title: 'Samsung Galaxy S24 Ultra 512GB',
-    store: 'Samsung Official',
-    isMall: true,
-    sold: '2.5k',
-    price: 1299.00,
-    oldPrice: 1399.00,
-    save: '100',
-    rating: 5,
-    reviews: 412,
-  },
-];
+import React, { useState, useEffect } from 'react';
+import { ArrowRight, Loader2, Image as ImageIcon } from 'lucide-react';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation'; // Thêm dòng này ở trên cùng
+interface ProductInternalDto {
+  productId: string;
+  name: string;
+  price: number;
+  discountPercentage: number;
+  mainImage: string;
+  shopId: string;
+  stock: number;
+}
 
 export default function FeaturedProducts() {
+  const [products, setProducts] = useState<ProductInternalDto[]>([]);
+  const [loading, setLoading] = useState(true);
+  const router = useRouter(); // Thêm dòng này
+  useEffect(() => {
+    const fetchTrendingProducts = async () => {
+      try {
+        const response = await fetch('http://localhost:8083/api/internal/products/trending');
+        if (response.ok) {
+          const data = await response.json();
+          // Limit to 5 products for a single beautiful row
+          setProducts(data.slice(0, 5));
+        }
+      } catch (error) {
+        console.error('Error loading products:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchTrendingProducts();
+  }, []);
+
+  // Fallback image if DB URL is broken or missing
+  const fallbackImage = "https://placehold.co/400x400/f8fafc/94a3b8?text=No+Image";
+
   return (
     <section className="w-full mt-12 bg-white border border-slate-200 rounded-3xl p-6 md:p-8 shadow-sm">
+      {/* HEADER BLOCK */}
       <div className="flex items-center justify-between mb-6 pb-4 border-b border-slate-100">
         <div>
-          <h2 className="text-2xl font-black text-slate-900 tracking-tight">Recommended for You</h2>
-          <p className="text-sm text-slate-500 mt-1">Products from top-rated sellers</p>
+          <h2 className="text-2xl font-black text-slate-900 tracking-tight">Best Selling Phones</h2>
+          <p className="text-sm text-slate-500 mt-1">Most popular products</p>
         </div>
-        <button className="text-sm font-bold text-slate-600 hover:text-blue-600 flex items-center gap-1 transition-colors uppercase tracking-wide">
-          See All <ArrowRight className="w-4 h-4" />
-        </button>
+        <Link 
+          href="/products" 
+          className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-full text-sm font-bold transition-colors flex items-center gap-1"
+        >
+          See all <ArrowRight className="w-4 h-4" />
+        </Link>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-        {PRODUCTS.map((product) => (
-          <div key={product.id} className="group flex flex-col border border-transparent hover:border-slate-200 hover:shadow-lg rounded-2xl p-3 transition-all duration-300">
-            
-            {/* Hình ảnh & Tem giảm giá */}
-            <div className="relative w-full h-48 bg-slate-50 rounded-xl mb-4 flex items-center justify-center">
-              {product.save && (
-                <span className="absolute top-2 left-2 bg-red-500 text-white text-[10px] font-bold px-2 py-1 rounded-md uppercase tracking-wide shadow-sm z-10">
-                  Save ${product.save}
-                </span>
-              )}
-              <button className="absolute top-2 right-2 p-1.5 bg-white/80 hover:bg-red-50 text-slate-400 hover:text-red-500 rounded-full transition-colors z-10">
-                <Heart className="w-4 h-4" />
-              </button>
-              <span className="text-slate-300 font-medium text-xs">Product Image</span>
-            </div>
+      {loading ? (
+        <div className="flex justify-center py-20">
+           <Loader2 className="w-10 h-10 animate-spin text-blue-600" />
+        </div>
+      ) : products.length === 0 ? (
+          <div className="text-center py-16 text-slate-500 font-medium border-2 border-dashed border-slate-100 rounded-2xl">
+            No products approved yet.
+        </div>
+      ) : (
+        // PRODUCT GRID BLOCK
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+          {products.map((product) => {
+            // TÍNH TOÁN GIÁ THẬT 
+            const hasDiscount = product.discountPercentage && product.discountPercentage > 0;
+            const salePrice = hasDiscount 
+              ? product.price * (1 - product.discountPercentage / 100) 
+              : product.price;
 
-            {/* Thông tin Gian Hàng (Marketplace Vibe nằm ở đây) */}
-            <div className="flex items-center gap-1.5 mb-2">
-              {product.isMall ? (
-                <span className="flex items-center gap-0.5 bg-blue-600 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-sm uppercase tracking-wider">
-                  <ShieldCheck className="w-3 h-3" /> Mall
-                </span>
-              ) : (
-                <Store className="w-3.5 h-3.5 text-slate-400" />
-              )}
-              <span className="text-xs font-medium text-slate-500 truncate hover:text-blue-600 cursor-pointer">
-                {product.store}
-              </span>
-            </div>
+            return (
+              <div 
+                  key={product.productId} 
+                  onClick={() => router.push(`/products/${product.productId}`)} 
+                  className="group bg-white flex flex-col border border-slate-200 hover:border-cyan-500 hover:shadow-xl hover:shadow-cyan-500/10 rounded-2xl overflow-hidden transition-all duration-300 relative cursor-pointer"
+                >
+                
+                {/* NHÃN GIẢM GIÁ (Chỉ hiện khi có Discount) */}
+                {hasDiscount && (
+                    <div className="absolute top-0 right-0 bg-yellow-400 text-slate-900 text-[11px] font-black px-2 py-1.5 rounded-bl-lg z-10 flex flex-col items-center leading-none shadow-sm">
+                       <span>SALE</span>
+                       <span className="text-sm mt-0.5">{product.discountPercentage}%</span>
+                    </div>
+                )}
 
-            {/* Tên sản phẩm */}
-            <h3 className="font-bold text-slate-900 text-sm mb-1 leading-snug hover:text-blue-600 cursor-pointer transition-colors line-clamp-2">
-              {product.title}
-            </h3>
+                {/* KHUNG ẢNH */}
+                <div className="relative w-full aspect-square bg-white p-4 flex items-center justify-center border-b border-slate-50">
+                  <img 
+                    src={product.mainImage || fallbackImage} 
+                    onError={(e) => { e.currentTarget.src = fallbackImage; }}
+                    alt={product.name} 
+                    className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-500" 
+                  />
+                </div>
 
-            {/* Đánh giá & Đã bán */}
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center gap-1">
-                <Star className="w-3.5 h-3.5 fill-yellow-400 text-yellow-400" />
-                <span className="text-xs font-bold text-slate-700">{product.rating}</span>
-                <span className="text-xs text-slate-400">({product.reviews})</span>
+                {/* THÔNG TIN SẢN PHẨM */}
+                <div className="p-4 flex flex-col flex-grow">
+                  <h3 className="font-bold text-slate-900 text-sm mb-2 leading-snug group-hover:text-cyan-600 transition-colors line-clamp-2 min-h-[2.5rem]">
+                    {product.name}
+                  </h3>
+
+                  {/* KHỐI GIÁ TIỀN */}
+                  <div className="flex flex-col mb-4">
+                    <span className="text-lg font-black text-cyan-600">
+                      {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(salePrice)}
+                    </span>
+                    {hasDiscount && (
+                        <span className="text-xs font-medium text-slate-400 line-through mt-0.5">
+                          {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(product.price)}
+                        </span>
+                    )}
+                  </div>
+
+                  {/* Khung Ghi chú Khuyến mãi */}
+                  <div className="mt-auto bg-slate-50 border border-slate-100 rounded-lg p-2.5">
+                    <p className="text-[11px] text-slate-600 leading-relaxed line-clamp-3">
+                      Trả góp 0% trên giá {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(salePrice)}. Tặng kèm gói bảo hành rơi vỡ 6 tháng. Miễn phí vận chuyển.
+                    </p>
+                  </div>
+                </div>
+
               </div>
-              <span className="text-[10px] font-medium text-slate-500">{product.sold} sold</span>
-            </div>
-
-            {/* Giá cả */}
-            <div className="mt-auto flex items-end gap-2">
-              <span className="text-lg font-black text-blue-600">${product.price.toFixed(2)}</span>
-              {product.oldPrice && (
-                <span className="text-xs font-medium text-slate-400 line-through mb-1">
-                  ${product.oldPrice.toFixed(2)}
-                </span>
-              )}
-            </div>
-
-          </div>
-        ))}
-      </div>
+            );
+          })}
+        </div>
+      )}
     </section>
   );
 }

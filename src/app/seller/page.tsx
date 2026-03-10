@@ -26,12 +26,12 @@ export default function SellerDashboard() {
   const [myProducts, setMyProducts] = useState<any[]>([]);
   const [approvalQueue, setApprovalQueue] = useState<any[]>([]);
   
-  // States Form Xử lý Thêm/Sửa
+  // States Form for Add/Edit
   const [showProductForm, setShowProductForm] = useState(false);
-  const [editingId, setEditingId] = useState<string | null>(null); // Lưu ID nếu đang ở chế độ Edit
+  const [editingId, setEditingId] = useState<string | null>(null); 
   const [productForm, setProductForm] = useState({ targetShopId: '', name: '', categoryId: 'CAT_PHONE', price: 0, discountPercentage: 0, description: '', imageUrl: '' });
 
-  // States Vendor Search Shop
+  // States Vendor Shop Search
   const [shopSearchQuery, setShopSearchQuery] = useState('');
   const [shopSearchResults, setShopSearchResults] = useState<any[]>([]);
   const [isSearchingShop, setIsSearchingShop] = useState(false);
@@ -52,13 +52,16 @@ export default function SellerDashboard() {
       fetchShopData(storedUserId, token, 'MANAGER');
     } else if (storedUserId.startsWith('VEND')) {
       setRole('VENDOR');
-      // Mockup Vendor quản lý hàng gửi vào SHOP_001 lúc đầu load
       fetchVendorProducts('SHOP_001', token);
       setLoading(false);
+    }else {
+      toast.error('Access Denied. This dashboard is strictly for Sellers and Managers.');
+      router.push('/'); 
+      return;
     }
   }, [router]);
 
-  // --- API FETCH LÝ DANH SÁCH ---
+  // --- API FETCH LIST ---
   const fetchShopData = async (ownerId: string, token: string, currentRole: string) => {
     try {
       const res = await fetch(`http://localhost:8082/api/shops/owner/${ownerId}`, { headers: { 'Authorization': `Bearer ${token}` } });
@@ -69,7 +72,7 @@ export default function SellerDashboard() {
           setShopData(shops[0]);
           if(currentRole === 'MANAGER') {
             fetchApprovalQueue(token, shops[0].shopId);
-            fetchManagerProducts(shops[0].shopId, token); // Gọi đúng API của Manager
+            fetchManagerProducts(shops[0].shopId, token); 
           }
         }
       }
@@ -99,7 +102,7 @@ export default function SellerDashboard() {
     } catch (error) {}
   };
 
-  // --- API TÌM KIẾM SHOP ---
+  // --- API SEARCH SHOP ---
   const searchShops = async (keyword: string) => {
     setShopSearchQuery(keyword);
     if (!keyword.trim()) { 
@@ -108,7 +111,7 @@ export default function SellerDashboard() {
     }
     
     setIsSearchingShop(true);
-    const token = localStorage.getItem('accessToken'); // Lấy token
+    const token = localStorage.getItem('accessToken'); 
 
     try {
       const res = await fetch(`http://localhost:8082/api/shops/search?keyword=${encodeURIComponent(keyword)}`, {
@@ -121,16 +124,16 @@ export default function SellerDashboard() {
         const data = await res.json();
         setShopSearchResults(data);
       } else {
-        console.error("Lỗi từ backend:", await res.text());
+        console.error("Backend error:", await res.text());
       }
     } catch (error) { 
-      console.error("Lỗi gọi API Search:", error); 
+      console.error("API Search error:", error); 
     } finally { 
       setIsSearchingShop(false); 
     }
   };
 
-  // --- HÀNH ĐỘNG MANAGER DUYỆT HÀNG ---
+  // --- MANAGER PRODUCT REVIEW ACTION ---
   const handleReviewProduct = async (productId: string, isApproved: boolean) => {
     let comments = "Approved"; let discount = 0;
     if (!isApproved) {
@@ -154,7 +157,7 @@ export default function SellerDashboard() {
     } catch (error: any) { toast.error(error.message); }
   };
 
-  // --- HÀNH ĐỘNG THÊM/SỬA SẢN PHẨM ---
+  // --- ADD/EDIT PRODUCT ACTION ---
   const handleProductSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
@@ -164,8 +167,8 @@ export default function SellerDashboard() {
     if (!finalShopId) { toast.error('Please select a partner shop!'); setSaving(false); return; }
 
     const url = editingId 
-      ? `http://localhost:8083/api/${role?.toLowerCase()}/products/${editingId}` // Gọi API Update
-      : `http://localhost:8083/api/vendor/products`; // Gọi API Create
+      ? `http://localhost:8083/api/${role?.toLowerCase()}/products/${editingId}` 
+      : `http://localhost:8083/api/vendor/products`; 
 
     const method = editingId ? 'PUT' : 'POST';
 
@@ -179,14 +182,13 @@ export default function SellerDashboard() {
       
       toast.success(editingId ? 'Product updated successfully!' : 'Product submitted successfully!');
       setShowProductForm(false);
-      
-      // Reload danh sách
+      // Reload list
       if(role === 'MANAGER') fetchManagerProducts(shopData.shopId, token!);
       else fetchVendorProducts(finalShopId, token!);
     } catch (err: any) { toast.error(err.message); } finally { setSaving(false); }
   };
 
-  // Mở Form để Edit
+  // Open Form to Edit
   const openEditForm = (product: any) => {
     setEditingId(product.productId);
     setProductForm({
@@ -198,11 +200,11 @@ export default function SellerDashboard() {
       description: product.description || '',
       imageUrl: product.imageUrl || ''
     });
-    setShopSearchQuery(product.shopId); // Set tạm ID shop cho UI Vendor
+    setShopSearchQuery(product.shopId); 
     setShowProductForm(true);
   };
 
-  // Mở Form để Add
+  // Open Form to Add
   const openAddForm = () => {
     setEditingId(null);
     setProductForm({ targetShopId: '', name: '', categoryId: 'CAT_PHONE', price: 0, discountPercentage: 0, description: '', imageUrl: '' });
@@ -210,7 +212,7 @@ export default function SellerDashboard() {
     setShowProductForm(true);
   };
 
-  // --- HÀNH ĐỘNG XÓA SẢN PHẨM ---
+  // --- DELETE PRODUCT ACTION ---
   const handleDeleteProduct = async (productId: string) => {
     if (!confirm("Are you sure you want to delete this product?")) return;
     const token = localStorage.getItem('accessToken');
@@ -221,7 +223,7 @@ export default function SellerDashboard() {
       });
       if(!res.ok) throw new Error('Failed to delete');
       toast.success('Product deleted!');
-      // Reload danh sách
+      // Reload list
       if(role === 'MANAGER') fetchManagerProducts(shopData.shopId, token!);
       else fetchVendorProducts(productForm.targetShopId || 'SHOP_001', token!);
     } catch (error: any) { toast.error(error.message); }
@@ -337,7 +339,7 @@ export default function SellerDashboard() {
                                   {p.approvalStatus}
                                 </span>
                               </td>
-                              {/* CẢ MANAGER & VENDOR ĐỀU ĐƯỢC QUYỀN SỬA/XÓA SP TRONG LIST CỦA HỌ */}
+                              {/* BOTH MANAGER & VENDOR CAN EDIT/DELETE PRODUCTS IN THEIR LIST */}
                               <td className="py-4 text-right">
                                 <div className="flex justify-end gap-2">
                                   <button onClick={() => openEditForm(p)} className="p-2 text-slate-400 hover:text-cyan-600 hover:bg-cyan-50 rounded-lg transition-colors"><Edit className="w-4 h-4" /></button>
@@ -417,7 +419,7 @@ export default function SellerDashboard() {
                            <input type="number" step="0.01" required value={productForm.price} onChange={(e)=>setProductForm({...productForm, price: parseFloat(e.target.value)})} className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-cyan-500 outline-none bg-slate-50 focus:bg-white text-sm" />
                          </div>
                          
-                         {/* CHỈ MANAGER ĐƯỢC NHẬP DISCOUNT */}
+                         {/* ONLY MANAGER CAN ENTER DISCOUNT */}
                          {role === 'MANAGER' && (
                            <div>
                              <label className="block text-sm font-bold text-slate-700 mb-2 flex items-center gap-1">Discount <Percent className="w-3.5 h-3.5"/></label>

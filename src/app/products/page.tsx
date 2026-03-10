@@ -15,7 +15,6 @@ interface ProductInternalDto {
   stock: number;
 }
 
-// Thêm Interface cho Category
 interface CategoryDto {
   categoryId: string;
   name: string;
@@ -107,7 +106,7 @@ function ProductsContent() {
   const handleApplyFilter = () => {
     const params = new URLSearchParams();
     if (keyword) params.append('keyword', keyword);
-    if (selectedCategory) params.append('category', selectedCategory); // selectedCategory lúc này đã là ID
+    if (selectedCategory) params.append('category', selectedCategory); // selectedCategory là ID
     if (minPrice) params.append('minPrice', minPrice);
     if (maxPrice) params.append('maxPrice', maxPrice);
     
@@ -284,7 +283,9 @@ function ProductsContent() {
             <>
               <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-5">
                 {products.map((product) => {
-                  const hasDiscount = product.discountPercentage && product.discountPercentage > 0;
+                  // [BUG FIXED] Just check greater than 0, JS will auto-cast to true/false!
+                  const hasDiscount = product.discountPercentage > 0; 
+                  
                   const salePrice = hasDiscount 
                     ? product.price * (1 - product.discountPercentage / 100) 
                     : product.price;
@@ -295,22 +296,29 @@ function ProductsContent() {
                       onClick={() => router.push(`/products/${product.productId}`)} 
                       className="group bg-white flex flex-col border border-slate-200 hover:border-cyan-500 hover:shadow-xl hover:shadow-cyan-500/10 rounded-2xl overflow-hidden transition-all duration-300 relative cursor-pointer"
                     >
+                      {/* 1. The zero at the corner of the image will disappear */}
                       {hasDiscount && (
                           <div className="absolute top-0 right-0 bg-yellow-400 text-slate-900 text-[11px] font-black px-2 py-1.5 rounded-bl-lg z-10 flex flex-col items-center leading-none shadow-sm">
                             <span>SALE</span><span className="text-sm mt-0.5">{product.discountPercentage}%</span>
                           </div>
                       )}
+                      
                       <div className="relative w-full aspect-square bg-white p-4 flex items-center justify-center border-b border-slate-50">
                         <img src={product.mainImage || fallbackImage} onError={(e) => { e.currentTarget.src = fallbackImage; }} alt={product.name} className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-500" />
                       </div>
+                      
                       <div className="p-4 flex flex-col flex-grow">
                         <h3 className="font-bold text-slate-900 text-sm mb-2 leading-snug group-hover:text-cyan-600 transition-colors line-clamp-2 min-h-[2.5rem]">{product.name}</h3>
+                        
                         <div className="flex flex-col mb-4">
                           <span className="text-lg font-black text-cyan-600">{new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(salePrice)}</span>
+                          
+                          {/* 2. The zero in the old price will also disappear if there is no sale */}
                           {hasDiscount && (
                               <span className="text-xs font-medium text-slate-400 line-through mt-0.5">{new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(product.price)}</span>
                           )}
                         </div>
+                        
                         <div className="mt-auto bg-slate-50 border border-slate-100 rounded-lg p-2.5">
                           <p className="text-[11px] text-slate-600 leading-relaxed line-clamp-3">0% installment. Free 6-month warranty. Free shipping.</p>
                         </div>

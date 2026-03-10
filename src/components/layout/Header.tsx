@@ -73,6 +73,53 @@ export default function Header() {
   const [activeCategoryId, setActiveCategoryId] = useState<string>(''); 
   const catMenuRef = useRef<HTMLDivElement>(null);
 
+  const [wishlistCount, setWishlistCount] = useState(0);
+  const [wishlistPreview, setWishlistPreview] = useState<any[]>([]);
+  const [cartCount, setCartCount] = useState(0);
+  const [cartItems, setCartItems] = useState<any[]>([]); 
+  useEffect(() => {
+    const fetchWishlistHeader = async () => {
+      const token = localStorage.getItem('accessToken') || localStorage.getItem('token');
+      const userId = localStorage.getItem('userId');
+
+      if (!token) return;
+
+      try {
+        const res = await fetch(`http://localhost:8081/api/wishlists/${userId}`, {
+        headers: { 'Authorization': `Bearer ${token}` },
+        cache: 'no-store'
+        });
+        
+        if (res.ok) {
+          const data = await res.json();
+          setWishlistCount(data.length);
+
+          // Chỉ lấy tối đa 3 sản phẩm mới nhất để show trên dropdown Header
+          const topItems = data.slice(0, 3);
+          if (topItems.length > 0) {
+            const ids = topItems.map((item: any) => item.productId).join(',');
+            // Gọi API Batch để lấy nhanh Hình, Tên, Giá (Cổng 8083)
+            const prodRes = await fetch(`http://localhost:8083/api/internal/products/batch?ids=${ids}`);
+            if (prodRes.ok) {
+              const prodData = await prodRes.json();
+              setWishlistPreview(prodData);
+            }
+          } else {
+            setWishlistPreview([]);
+          }
+        }
+      } catch (err) {
+        console.error("Lỗi lấy preview wishlist header:", err);
+      }
+    };
+
+    fetchWishlistHeader(); // Chạy lần đầu khi load web
+
+    // Lắng nghe sự kiện từ trang ProductDetail
+    window.addEventListener('wishlistUpdated', fetchWishlistHeader);
+    return () => window.removeEventListener('wishlistUpdated', fetchWishlistHeader);
+  }, []);
+
   useEffect(() => {
     setIsMounted(true);
     if (typeof window !== 'undefined') {
@@ -125,7 +172,7 @@ export default function Header() {
     localStorage.removeItem('userId');
     setIsLoggedIn(false);
     setUserName('User');
-    toast.success('Đã đăng xuất thành công!');
+    toast.success('Logged out successfully!');
     router.push('/login');
   };
 
@@ -164,13 +211,58 @@ export default function Header() {
     return () => document.removeEventListener("mousedown", handleCatClickOutside);
   }, [catMenuRef]);
 
+  useEffect(() => {
+    const fetchCartHeader = async () => {
+      const token = localStorage.getItem('accessToken') || localStorage.getItem('token');
+      const userId = localStorage.getItem('userId');
+      if (!token || !userId) return;
+
+      try {
+        const res = await fetch(`http://localhost:8088/api/cart`, {
+          headers: { 
+            'Authorization': `Bearer ${token}`,
+            'userId': userId
+          }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setCartCount(data.totalItems || 0); 
+          setCartItems(data.items || []); 
+        }
+      } catch (err) {
+        console.error("Lỗi lấy giỏ hàng header", err);
+      }
+    };
+
+    // Khởi chạy lần đầu tiên
+    fetchCartHeader();
+
+    // Lắng nghe sự kiện để tự động cập nhật
+    window.addEventListener('cartUpdated', fetchCartHeader);
+    return () => window.removeEventListener('cartUpdated', fetchCartHeader);
+  }, []);
+
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if(searchInput.trim()) {
+    const keyword = searchInput.trim();
+    
+    if(keyword) {
        setShowDropdown(false); 
-       router.push(`/products?keyword=${encodeURIComponent(searchInput.trim())}`);
+       router.push(`/products?keyword=${encodeURIComponent(keyword)}`);
+
+       const token = localStorage.getItem('accessToken') || localStorage.getItem('token');
+       if (token) {
+         fetch('http://localhost:8090/api/recommendations/track', { 
+           method: 'POST',
+           headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+           body: JSON.stringify({ 
+             actionType: 'SEARCH',
+             searchKeyword: keyword 
+           })
+         }).catch(err => console.error("Lỗi gửi log SEARCH:", err));
+       }
     }
-  };
+  }
 
   const fallbackImage = "https://placehold.co/100x100/f8fafc/94a3b8?text=Img";
   const activeCategoryData = categoriesList.find(c => c.id === activeCategoryId) || categoriesList[0];
@@ -248,41 +340,45 @@ export default function Header() {
           {/* Nút Yêu thích (Wishlist) kèm Dropdown Hover  */}
           {/* ========================================== */}
           <div className="relative group">
+            <div className="relative group">
             <Link href="/wishlist" className="flex text-slate-600 hover:text-cyan-600 transition-colors relative py-2" title="My Wishlist">
               <Heart className="w-6 h-6" />
-              <span className="absolute top-0 -right-1.5 w-4 h-4 bg-red-500 text-[10px] font-bold text-white flex items-center justify-center rounded-full border-2 border-white shadow-sm">
-                3
-              </span>
+              {/* CHỈ HIỆN SỐ KHI > 0 */}
+              {wishlistCount > 0 && (
+                <span className="absolute top-0 -right-1.5 w-4 h-4 bg-red-500 text-[10px] font-bold text-white flex items-center justify-center rounded-full border-2 border-white shadow-sm">
+                  {wishlistCount}
+                </span>
+              )}
             </Link>
 
             {/* Dropdown Menu Yêu thích */}
             <div className="absolute top-full right-0 w-80 bg-white border border-slate-200 shadow-2xl rounded-2xl overflow-hidden opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-300 z-50 transform origin-top-right scale-95 group-hover:scale-100">
               <div className="p-4 border-b border-slate-100 bg-slate-50 flex justify-between items-center">
                 <h4 className="font-bold text-slate-900 text-sm">Recently Saved</h4>
-                <span className="text-xs font-bold text-slate-400 bg-white px-2 py-1 rounded-md border border-slate-200">3 Items</span>
+                <span className="text-xs font-bold text-slate-400 bg-white px-2 py-1 rounded-md border border-slate-200">{wishlistCount} Items</span>
               </div>
               
               <div className="max-h-[300px] overflow-y-auto">
-                {/* Mock Item 1 */}
-                <Link href="#" className="flex items-center gap-4 p-4 border-b border-slate-50 hover:bg-slate-50 transition-colors group/item">
-                  <div className="w-12 h-12 bg-white rounded-lg border border-slate-100 flex items-center justify-center shrink-0 overflow-hidden">
-                    <img src="https://images.unsplash.com/photo-1610945265064-0e34e5519bbf?w=100&q=80" alt="Phone" className="w-full h-full object-cover group-hover/item:scale-110 transition-transform" />
+                {wishlistPreview.length > 0 ? (
+                  wishlistPreview.map(item => {
+                    const price = item.price * (1 - (item.discountPercentage || 0) / 100);
+                    return (
+                      <Link key={item.productId} href={`/products/${item.productId}`} className="flex items-center gap-4 p-4 border-b border-slate-50 hover:bg-slate-50 transition-colors group/item">
+                        <div className="w-12 h-12 bg-white rounded-lg border border-slate-100 flex items-center justify-center shrink-0 overflow-hidden">
+                          <img src={item.mainImage ? item.mainImage.split('|')[0] : "https://placehold.co/100x100?text=No+Image"} alt={item.name} className="w-full h-full object-cover group-hover/item:scale-110 transition-transform" />
+                        </div>
+                        <div className="flex flex-col flex-1 min-w-0">
+                          <span className="text-sm font-bold text-slate-900 line-clamp-1 group-hover/item:text-cyan-600 transition-colors">{item.name}</span>
+                          <span className="text-xs font-black text-red-500 mt-1">${price.toFixed(2)}</span>
+                        </div>
+                      </Link>
+                    );
+                  })
+                ) : (
+                  <div className="p-6 text-center text-slate-500 text-sm font-medium">
+                    Your wishlist is empty.
                   </div>
-                  <div className="flex flex-col flex-1 min-w-0">
-                    <span className="text-sm font-bold text-slate-900 line-clamp-1 group-hover/item:text-cyan-600 transition-colors">Samsung Galaxy S23 Ultra</span>
-                    <span className="text-xs font-black text-red-500 mt-1">$949.00</span>
-                  </div>
-                </Link>
-                {/* Mock Item 2 */}
-                <Link href="#" className="flex items-center gap-4 p-4 border-b border-slate-50 hover:bg-slate-50 transition-colors group/item">
-                  <div className="w-12 h-12 bg-white rounded-lg border border-slate-100 flex items-center justify-center shrink-0 overflow-hidden">
-                    <img src="https://images.unsplash.com/photo-1603302576837-37561b2e2302?w=100&q=80" alt="Laptop" className="w-full h-full object-cover group-hover/item:scale-110 transition-transform" />
-                  </div>
-                  <div className="flex flex-col flex-1 min-w-0">
-                    <span className="text-sm font-bold text-slate-900 line-clamp-1 group-hover/item:text-cyan-600 transition-colors">MacBook Pro M3 14"</span>
-                    <span className="text-xs font-black text-red-500 mt-1">$1,599.00</span>
-                  </div>
-                </Link>
+                )}
               </div>
 
               <div className="p-3 bg-white border-t border-slate-100">
@@ -290,6 +386,7 @@ export default function Header() {
                   View Full Wishlist
                 </Link>
               </div>
+            </div>
             </div>
           </div>
           {/* ========================================== */}
@@ -333,12 +430,69 @@ export default function Header() {
           </div>
 
           {/* Nút Giỏ Hàng (Cart) */}
-          <Link href="/cart" className="text-slate-600 hover:text-cyan-600 transition-colors relative ml-1" title="Shopping Cart">
-            <ShoppingCart className="w-6 h-6" />
-            <span className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-cyan-600 text-[10px] font-bold text-white flex items-center justify-center rounded-full border-2 border-white">
-              2
-            </span>
-          </Link>
+          <div className="relative group flex items-center h-full py-4">
+            <Link href="/cart" className="text-slate-600 hover:text-cyan-600 transition-colors relative ml-1 block" title="Shopping Cart">
+              <ShoppingCart className="w-6 h-6" />
+              {cartCount > 0 && (
+                <span className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-cyan-600 text-[10px] font-bold text-white flex items-center justify-center rounded-full border-2 border-white">
+                  {cartCount}
+                </span>
+              )}
+            </Link>
+
+            {/* KHU VỰC DROPDOWN MINI CART (Chỉ hiện khi hover) */}
+            <div className="absolute right-0 top-full w-80 md:w-96 pt-2 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-300 z-[100] transform origin-top-right scale-95 group-hover:scale-100">
+              <div className="bg-white rounded-2xl shadow-[0_20px_50px_-12px_rgba(0,0,0,0.15)] border border-slate-100 overflow-hidden flex flex-col">
+                
+                <div className="p-4 border-b border-slate-100 bg-slate-50/50">
+                  <h4 className="text-xs font-black text-slate-500 uppercase tracking-widest">Recently Added</h4>
+                </div>
+                
+                {cartCount === 0 ? (
+                  <div className="p-8 text-center flex flex-col items-center justify-center">
+                    <ShoppingCart className="w-12 h-12 text-slate-200 mb-3" />
+                    <p className="text-sm font-bold text-slate-500">Your cart is empty</p>
+                  </div>
+                ) : (
+                  <>
+                    <div className="max-h-[320px] overflow-y-auto p-2 scrollbar-thin">
+                      {/* Chỉ hiển thị tối đa 5 sản phẩm mới nhất */}
+                      {cartItems.slice(0, 5).map((item, idx) => {
+                        const img = item.productImage ? item.productImage.split('|')[0] : 'https://placehold.co/100x100?text=No+Image';
+                        return (
+                          <Link href={`/products/${item.productId}`} key={idx} className="flex items-center gap-3 p-2.5 hover:bg-slate-50 rounded-xl transition-colors group/item">
+                            <div className="w-14 h-14 bg-white rounded-lg border border-slate-100 flex items-center justify-center p-1.5 shrink-0">
+                              <img src={img} alt={item.productName} className="w-full h-full object-contain mix-blend-multiply group-hover/item:scale-110 transition-transform" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-bold text-slate-800 truncate">{item.productName}</p>
+                              <p className="text-xs font-medium text-slate-500 mt-1">Qty: <span className="text-slate-900">{item.quantity}</span></p>
+                            </div>
+                            <div className="text-right shrink-0">
+                              <p className="text-sm font-black text-cyan-600">
+                                {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(item.unitPrice)}
+                              </p>
+                            </div>
+                          </Link>
+                        );
+                      })}
+                    </div>
+
+                    <div className="p-4 border-t border-slate-100 bg-white">
+                      <div className="flex justify-between items-center mb-4">
+                        <span className="text-sm font-bold text-slate-500">{cartCount} Items in cart</span>
+                        <span className="text-xs font-medium text-slate-400">Taxes excluded</span>
+                      </div>
+                      <Link href="/cart" className="w-full py-3 bg-slate-900 text-white text-sm font-black rounded-xl hover:bg-cyan-600 transition-colors flex items-center justify-center shadow-md">
+                        View My Cart
+                      </Link>
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+            {/* END DROPDOWN */}
+          </div>
         </div>
       </div>
 
@@ -406,7 +560,7 @@ export default function Header() {
                       {activeCategoryData.brands.map((brand: string, idx: number) => (
                         <li key={idx}>
                           <Link 
-                            href={`/products?category=${activeCategoryData.id}&keyword=${encodeURIComponent(brand)}`} 
+                            href={`/products?category=${activeCategoryData.id}&brand=${encodeURIComponent(brand)}`} 
                             onClick={() => setShowCategories(false)}
                             className="text-[15px] font-medium text-slate-700 hover:text-cyan-600 hover:translate-x-1 transition-transform inline-block"
                           >

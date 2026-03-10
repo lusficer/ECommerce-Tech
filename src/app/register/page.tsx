@@ -3,8 +3,7 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
 import { EyeOff, Fingerprint, Loader2 } from 'lucide-react';
-
-// Danh sách các Role từ Backend
+import toast from 'react-hot-toast';
 const ROLES = [
   { value: 'CUSTOMER', label: 'Customer' },
   { value: 'VENDOR', label: 'Vendor' },
@@ -21,7 +20,7 @@ export default function RegisterPage() {
     phone: '',
     password: '',
     confirmPassword: '',
-    role: 'CUSTOMER', // Default role
+    role: 'CUSTOMER', 
   });
 
   const [loading, setLoading] = useState(false);
@@ -37,7 +36,7 @@ export default function RegisterPage() {
     setError('');
 
     if (formData.password !== formData.confirmPassword) {
-      setError('Mật khẩu xác nhận không khớp!');
+      toast.error("Passwords do not match!");
       return;
     }
 
@@ -49,7 +48,6 @@ export default function RegisterPage() {
         headers: {
           'Content-Type': 'application/json',
         },
-        // Chỉ gửi những trường backend yêu cầu
         body: JSON.stringify({
           name: formData.name,
           email: formData.email,
@@ -65,7 +63,7 @@ export default function RegisterPage() {
 
       const data = await response.json();
       console.log('Register Success:', data);
-      alert('Đăng ký thành công! Đang chuyển hướng đến trang đăng nhập...');
+      toast.success('Register successful! Redirecting to login page');
 
       window.location.href = '/login';
     } catch (err: any) {

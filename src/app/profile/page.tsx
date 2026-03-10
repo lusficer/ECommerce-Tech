@@ -36,7 +36,7 @@ export default function ProfilePage() {
     const storedUserId = localStorage.getItem('userId');
 
     if (!token || !storedUserId) {
-      toast.error('Vui lòng đăng nhập để xem hồ sơ!');
+      toast.error('Please login to view your profile!');
       router.push('/login');
       return;
     }
@@ -54,7 +54,7 @@ export default function ProfilePage() {
         }
       });
 
-      if (!response.ok) throw new Error('Không thể tải dữ liệu hồ sơ');
+      if (!response.ok) throw new Error('Failed to load profile data. Please try again!');
 
       const data = await response.json();
       if (data.profile) {
@@ -94,9 +94,9 @@ export default function ProfilePage() {
         body: JSON.stringify(formData),
       });
 
-      if (!response.ok) throw new Error('Cập nhật thất bại. Vui lòng thử lại!');
+      if (!response.ok) throw new Error('Update profile failed. Please try again!');
 
-      toast.success('Cập nhật hồ sơ thành công!');
+      toast.success('Update profile successful!');
       
       setTimeout(() => {
         window.location.reload();
@@ -109,7 +109,7 @@ export default function ProfilePage() {
     }
   };
 
-  // --- HÀM XỬ LÝ ĐỔI MẬT KHẨU ---
+  // --- PASSWORD CHANGE HANDLER ---
   const handleUpdatePassword = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -136,13 +136,12 @@ export default function ProfilePage() {
       });
 
       if (!response.ok) {
-        // Cố gắng đọc message lỗi từ backend trả về (nếu có)
         const errData = await response.json().catch(() => null);
-        throw new Error(errData?.message || 'Mật khẩu hiện tại không đúng hoặc có lỗi xảy ra!');
+        throw new Error(errData?.message || 'Change password fail - please check your current password and try again!');
       }
 
       toast.success('Đổi mật khẩu thành công!');
-      // Reset form sau khi đổi thành công
+      // Reset form after successful change
       setPasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' });
 
     } catch (error: any) {
@@ -155,7 +154,7 @@ export default function ProfilePage() {
   const handleLogout = () => {
     localStorage.removeItem('accessToken');
     localStorage.removeItem('userId');
-    toast.success('Đã đăng xuất!');
+    toast.success('Successfully logged out!');
     window.location.href = '/login';
   };
 

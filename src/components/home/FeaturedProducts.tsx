@@ -3,7 +3,8 @@
 import React, { useState, useEffect } from 'react';
 import { ArrowRight, Loader2, Image as ImageIcon } from 'lucide-react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation'; // Thêm dòng này ở trên cùng
+import { useRouter } from 'next/navigation';
+
 interface ProductInternalDto {
   productId: string;
   name: string;
@@ -17,14 +18,14 @@ interface ProductInternalDto {
 export default function FeaturedProducts() {
   const [products, setProducts] = useState<ProductInternalDto[]>([]);
   const [loading, setLoading] = useState(true);
-  const router = useRouter(); // Thêm dòng này
+  const router = useRouter(); 
+
   useEffect(() => {
     const fetchTrendingProducts = async () => {
       try {
         const response = await fetch('http://localhost:8083/api/internal/products/trending');
         if (response.ok) {
           const data = await response.json();
-          // Limit to 5 products for a single beautiful row
           setProducts(data.slice(0, 5));
         }
       } catch (error) {
@@ -37,12 +38,10 @@ export default function FeaturedProducts() {
     fetchTrendingProducts();
   }, []);
 
-  // Fallback image if DB URL is broken or missing
   const fallbackImage = "https://placehold.co/400x400/f8fafc/94a3b8?text=No+Image";
 
   return (
     <section className="w-full mt-12 bg-white border border-slate-200 rounded-3xl p-6 md:p-8 shadow-sm">
-      {/* HEADER BLOCK */}
       <div className="flex items-center justify-between mb-6 pb-4 border-b border-slate-100">
         <div>
           <h2 className="text-2xl font-black text-slate-900 tracking-tight">Best Selling Phones</h2>
@@ -65,11 +64,10 @@ export default function FeaturedProducts() {
             No products approved yet.
         </div>
       ) : (
-        // PRODUCT GRID BLOCK
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
           {products.map((product) => {
-            // TÍNH TOÁN GIÁ THẬT 
-            const hasDiscount = product.discountPercentage && product.discountPercentage > 0;
+            const hasDiscount = product.discountPercentage > 0; 
+            
             const salePrice = hasDiscount 
               ? product.price * (1 - product.discountPercentage / 100) 
               : product.price;
@@ -81,43 +79,39 @@ export default function FeaturedProducts() {
                   className="group bg-white flex flex-col border border-slate-200 hover:border-cyan-500 hover:shadow-xl hover:shadow-cyan-500/10 rounded-2xl overflow-hidden transition-all duration-300 relative cursor-pointer"
                 >
                 
-                {/* NHÃN GIẢM GIÁ (Chỉ hiện khi có Discount) */}
-                {hasDiscount && (
+                {hasDiscount ? (
                     <div className="absolute top-0 right-0 bg-yellow-400 text-slate-900 text-[11px] font-black px-2 py-1.5 rounded-bl-lg z-10 flex flex-col items-center leading-none shadow-sm">
                        <span>SALE</span>
                        <span className="text-sm mt-0.5">{product.discountPercentage}%</span>
                     </div>
-                )}
+                ) : null}
 
-                {/* KHUNG ẢNH */}
                 <div className="relative w-full aspect-square bg-white p-4 flex items-center justify-center border-b border-slate-50">
                   <img 
-                    src={product.mainImage || fallbackImage} 
+                    src={product.mainImage ? product.mainImage.split('|')[0] : fallbackImage} 
                     onError={(e) => { e.currentTarget.src = fallbackImage; }}
                     alt={product.name} 
                     className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-500" 
                   />
                 </div>
 
-                {/* THÔNG TIN SẢN PHẨM */}
                 <div className="p-4 flex flex-col flex-grow">
                   <h3 className="font-bold text-slate-900 text-sm mb-2 leading-snug group-hover:text-cyan-600 transition-colors line-clamp-2 min-h-[2.5rem]">
                     {product.name}
                   </h3>
 
-                  {/* KHỐI GIÁ TIỀN */}
                   <div className="flex flex-col mb-4">
                     <span className="text-lg font-black text-cyan-600">
                       {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(salePrice)}
                     </span>
-                    {hasDiscount && (
+                    {/* [ĐÃ SỬA LỖI DÍNH SỐ 0 Ở GIÁ CŨ] */}
+                    {hasDiscount ? (
                         <span className="text-xs font-medium text-slate-400 line-through mt-0.5">
                           {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(product.price)}
                         </span>
-                    )}
+                    ) : null}
                   </div>
 
-                  {/* Khung Ghi chú Khuyến mãi */}
                   <div className="mt-auto bg-slate-50 border border-slate-100 rounded-lg p-2.5">
                     <p className="text-[11px] text-slate-600 leading-relaxed line-clamp-3">
                       Trả góp 0% trên giá {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(salePrice)}. Tặng kèm gói bảo hành rơi vỡ 6 tháng. Miễn phí vận chuyển.

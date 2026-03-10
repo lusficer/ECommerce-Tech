@@ -6,7 +6,7 @@ import { EyeOff, MonitorSmartphone, Loader2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
 export default function LoginPage() {
-const router = useRouter(); // <-- Thêm dòng này
+const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -28,7 +28,7 @@ const router = useRouter(); // <-- Thêm dòng này
       });
 
       if (!response.ok) {
-        throw new Error('Đăng nhập thất bại. Kiểm tra lại thông tin!');
+        throw new Error('Login failed. Please check your credentials!');
       }
 
       const data = await response.json();
@@ -36,9 +36,9 @@ const router = useRouter(); // <-- Thêm dòng này
         localStorage.setItem('accessToken', data.accessToken);
       }
       if (data.userId) {
-        localStorage.setItem('userId', data.userId);
+        localStorage.setItem('userId', data.userId);        
       }      
-      toast.success('Đăng nhập thành công! Đang chuyển hướng...');
+      toast.success('Login successful! Redirecting...');
       
       window.location.href = '/';      
     } catch (err: any) {

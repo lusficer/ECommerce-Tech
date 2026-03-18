@@ -11,6 +11,7 @@ public class ProductInternalDto {
     private String productId;
     private String name;
     private String mainImage;
+    private Integer discountPercentage;
     private BigDecimal price;
     private Integer stock;
     private String shopId;

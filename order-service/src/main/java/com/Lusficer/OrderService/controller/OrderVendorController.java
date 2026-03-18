@@ -1,8 +1,10 @@
 package com.Lusficer.OrderService.controller;
 
+import com.Lusficer.OrderService.client.ShopClient; // [MỚI]
 import com.Lusficer.OrderService.dto.request.UpdateStatusRequest;
 import com.Lusficer.OrderService.entity.Order;
 import com.Lusficer.OrderService.enums.OrderStatus;
+import com.Lusficer.OrderService.exception.UnauthorizedAccessException; // Đảm bảo bạn đã import Exception này
 import com.Lusficer.OrderService.repository.OrderRepository;
 import com.Lusficer.OrderService.service.OrderService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -19,21 +21,25 @@ import java.util.List;
 @RequestMapping("/api/vendor/orders")
 @SecurityRequirement(name = "Bearer Token")
 @Tag(name = "Vendor Order", description = "Order management for Vendors")
-@PreAuthorize("hasRole('ROLE_VENDOR')") // Chỉ Vendor mới gọi được
+@PreAuthorize("hasRole('ROLE_VENDOR')")
 public class OrderVendorController {
 
     @Autowired private OrderService orderService;
     @Autowired private OrderRepository orderRepository;
+    @Autowired private ShopClient shopClient; // [MỚI]
 
-    // UC: View Received Orders
     @GetMapping("/{shopId}")
     @Operation(summary = "Get orders for a specific shop")
     public ResponseEntity<List<Order>> getShopOrders(
-            @RequestHeader("Vendor_Id") String vendorId, // ID người bán đang login
+            @RequestHeader("Vendor_Id") String vendorId, 
             @PathVariable("shopId") String shopId,
             @RequestParam(name = "status", required = false) String status){
         
-        // *Lưu ý: Trong thực tế nên check xem vendorId có sở hữu shopId này không
+        // [MỚI] Check xem vendorId có sở hữu/làm việc cho shopId này không
+        boolean isAssigned = shopClient.checkVendorAccess(shopId, vendorId);
+        if (!isAssigned) {
+            throw new UnauthorizedAccessException("Bạn không có quyền xem đơn hàng của Shop này!");
+        }
         
         if (status != null && !status.isEmpty()) {
             return ResponseEntity.ok(
@@ -43,7 +49,6 @@ public class OrderVendorController {
         return ResponseEntity.ok(orderRepository.findByShopIdOrderByCreatedAtDesc(shopId));
     }
 
-    // UC: Update Status (Vendor update: Processing, Ready to Ship...)
     @PutMapping("/{orderId}/status")
     @Operation(summary = "Update order status (e.g., PROCESSING, READY_TO_SHIP)")
     public ResponseEntity<Order> updateStatus(
@@ -51,7 +56,11 @@ public class OrderVendorController {
             @PathVariable("orderId") String orderId,
             @RequestBody UpdateStatusRequest request) {
         
-        // Đảm bảo request dùng đúng shop của Vendor này
+        boolean isAssigned = shopClient.checkVendorAccess(request.getShopId(), vendorId);
+        if (!isAssigned) {
+            throw new UnauthorizedAccessException("Bạn không có quyền cập nhật đơn hàng của Shop này!");
+        }
+
         return ResponseEntity.ok(orderService.updateOrderStatus(orderId, request));
     }
 }

@@ -16,13 +16,12 @@ public class Cart {
     private Long cartId;
 
     @Column(nullable = false, unique = true)
-    private String userId; // Mỗi user chỉ có 1 giỏ
+    private String userId; 
 
     private BigDecimal totalPrice;
 
     private LocalDateTime updatedAt;
 
-    // Quan hệ 1-N với CartItem
     @OneToMany(mappedBy = "cart", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<CartItem> items = new ArrayList<>();
     

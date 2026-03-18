@@ -10,5 +10,6 @@ public record ShopProfileResponse(
         String address,
         String description,
         String logoUrl,
+        LocalDateTime createdAt,
         LocalDateTime updatedAt
 ) {}

@@ -28,11 +28,7 @@ public class UserRole {
 
     private LocalDateTime createdAt;
 
-    // Keep the entity as a pure data holder. ID/sequence generation is handled
-    // in the registration flow (controller/service) to avoid embedding business
-    // logic in the entity. Lombok (@Data/@Builder) provides getters/setters.
-
     public enum RoleName {
-        ADMIN, CUSTOMER, SHOP_MANAGER, VENDOR, GUEST, WAREHOUSE_MANAGER
-    }
+        ADMIN, CUSTOMER, SHOP_MANAGER, VENDOR, GUEST, WAREHOUSE_MANAGER, SHIPPER 
+       }
 }

@@ -5,7 +5,8 @@ public enum OrderStatus {
     NEW,                  // Mới (Vendor thấy)
     PROCESSING,           // Đang đóng gói
     SHIPPING,             // Đang giao
-    DELIVERED,            // Đã giao
+    DELIVERED, 
+    DELIVERY_FAILED,          
     COMPLETED,            // Hoàn tất
     CANCELLED,            // Đã hủy
     REJECTED,             // Bị từ chối duyệt

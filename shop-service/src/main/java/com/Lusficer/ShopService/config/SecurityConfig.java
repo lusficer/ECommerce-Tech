@@ -1,15 +1,23 @@
+// shop-service/src/main/java/com/Lusficer/ShopService/config/SecurityConfig.java
 package com.Lusficer.ShopService.config;
 
+import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
-import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
 @Configuration
-@EnableWebSecurity
+@RequiredArgsConstructor
 public class SecurityConfig {
+
+    private final JwtAuthenticationFilter jwtFilter;
 
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
@@ -17,32 +25,33 @@ public class SecurityConfig {
             // Disable CSRF
             .csrf(csrf -> csrf.disable())
             
-            // Disable Basic Auth popup
             .httpBasic(basic -> basic.disable())
             .formLogin(form -> form.disable())
             
-            // Use stateless session
             .sessionManagement(session -> 
                 session.sessionCreationPolicy(SessionCreationPolicy.STATELESS)
             )
             
-            // Configure CORS
             .cors(cors -> cors.configure(http))
             
-            // Configure authorization
             .authorizeHttpRequests(auth -> auth
-                // Swagger UI and API docs
                 .requestMatchers("/v3/api-docs/**", 
                                "/swagger-ui/**", 
                                "/swagger-ui.html",
                                "/webjars/**").permitAll()
-                // Actuator endpoints
                 .requestMatchers("/actuator/**").permitAll()
-                // Public APIs
+                .requestMatchers("/api/auth/**",
+                               "/api/public/**").permitAll()
                 .requestMatchers("/api/public/**").permitAll()
-                // Protected APIs
-                .anyRequest().permitAll()  // Tạm thời cho phép tất cả request cho đến khi implement JWT
+                .requestMatchers("/api/manager/**").authenticated()
+                .requestMatchers("/api/internal/**").permitAll()
+                .requestMatchers("/api/vendor/**").authenticated()
+                .requestMatchers("/api/warehouse/**").authenticated()
+                .anyRequest().authenticated()
             )
+            
+            // Add JWT filter
+            .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class)
             
             // Exception handling
             .exceptionHandling(exception -> exception
@@ -54,5 +63,15 @@ public class SecurityConfig {
             );
 
         return http.build();
+    }
+
+    @Bean
+    public PasswordEncoder passwordEncoder() {
+        return new BCryptPasswordEncoder();
+    }
+
+    @Bean
+    public AuthenticationManager authenticationManager(AuthenticationConfiguration config) throws Exception {
+        return config.getAuthenticationManager();
     }
 }

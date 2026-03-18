@@ -14,13 +14,13 @@ public class ProductApprovalLog {
 
     private String productId;
 
-    private String actorId; // Shop Manager ID hoặc Vendor ID
+    private String actorId; 
 
     @Enumerated(EnumType.STRING)
     private ApprovalAction action; // SUBMIT, APPROVE, REJECT
 
     @Column(columnDefinition = "TEXT")
-    private String comments; // Lý do từ chối 
+    private String comments;
 
     private LocalDateTime createdAt = LocalDateTime.now();
 }

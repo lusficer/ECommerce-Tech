@@ -12,9 +12,7 @@ import java.util.Map;
 public interface StockLogRepository extends JpaRepository<StockLog, Long> {
     List<StockLog> findByProductIdOrderByCreatedAtDesc(String productId);
 
-    // [FIX] Sửa tên cột trong SQL khớp với DB (changeAmount, createdAt, productId)
-    // Lưu ý: Tên bảng STOCK_LOG hay stock_log phụ thuộc vào DB của bạn. 
-    // Nếu lỗi "Table not found" thì đổi STOCK_LOG thành stock_log hoặc StockLog
+    // Adjust column names in SQL to match DB (changeAmount, createdAt, productId)
     @Query(value = "SELECT DATEDIFF(CURRENT_DATE, s.createdAt) as dayIndex, SUM(ABS(s.changeAmount)) as total " +
                "FROM STOCK_LOG s " +
                "WHERE s.productId = :productId " +

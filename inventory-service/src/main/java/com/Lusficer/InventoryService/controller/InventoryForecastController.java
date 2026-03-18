@@ -15,7 +15,7 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/api/internal/forecast")
-@Tag(name = "AI Forecast API", description = "API xem dự báo và điều khiển AI Inventory")
+@Tag(name = "AI Forecast API", description = "API for viewing forecasts and controlling AI Inventory")
 public class InventoryForecastController {
 
     @Autowired
@@ -24,20 +24,18 @@ public class InventoryForecastController {
     @Autowired
     private InventoryService inventoryService;
 
-    // 1. Xem trước (Preview): Admin xem AI dự đoán gì, chưa lưu vào DB
-    // Frontend sẽ dùng API này để vẽ biểu đồ
+    
     @GetMapping("/preview")
-    @Operation(summary = "Xem trước dự báo (Không lưu)", description = "Trả về danh sách dự báo dựa trên dữ liệu hiện tại.")
+    @Operation(summary = "Preview forecast (Not saved)", description = "Returns a list of forecasts based on current data.")
     public ResponseEntity<List<ForecastResultDto>> getForecastPreview() {
-        List<ForecastResultDto> result = forecastService.trainAndPredict(false); // false = Không lưu
+        List<ForecastResultDto> result = forecastService.trainAndPredict(false); // false = Not saved
         return ResponseEntity.ok(result);
     }
 
-    // 2. Kích hoạt (Run): Admin bấm nút "Áp dụng ngay"
     @PostMapping("/run")
-    @Operation(summary = "Chạy và Áp dụng dự báo", description = "Tính toán và cập nhật Safety Stock mới vào Database ngay lập tức.")
+    @Operation(summary = "Run and Apply forecast", description = "Calculates and updates new Safety Stock to Database immediately.")
     public ResponseEntity<List<ForecastResultDto>> runForecastManually() {
-        List<ForecastResultDto> result = forecastService.trainAndPredict(true); // true = Lưu luôn
+        List<ForecastResultDto> result = forecastService.trainAndPredict(true); // true = Save immediately
         return ResponseEntity.ok(result);
     }
     

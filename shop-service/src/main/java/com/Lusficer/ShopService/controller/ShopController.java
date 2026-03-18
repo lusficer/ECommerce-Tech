@@ -8,6 +8,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -20,6 +21,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/shops")
 @RequiredArgsConstructor
+@SecurityRequirement(name = "Bearer Token")
 @Tag(name = "Shop Management")
 public class ShopController {
 
@@ -27,6 +29,7 @@ public class ShopController {
 
     @GetMapping
     @Operation(summary = "Get all shops", description = "Retrieve a list of all available shops")
+    @PreAuthorize("hasRole('ADMIN')")
     @ApiResponse(responseCode = "200", description = "Successfully retrieved all shops",
         content = @Content(schema = @Schema(implementation = Shop.class)))
     public ResponseEntity<List<Shop>> getAllShops() {
@@ -34,11 +37,18 @@ public class ShopController {
         return ResponseEntity.ok(shops);
     }
 
+    @GetMapping("/{shopId}")
+    @Operation(summary = "Get shop by ID", description = "Retrieve a specific shop profile for customers")
+    public ResponseEntity<ShopProfileResponse> getShopById(@PathVariable("shopId") String shopId) {
+        return ResponseEntity.ok(shopService.getShopById(shopId));
+    }
+
     @GetMapping("/owner/{ownerId}")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('SHOP_MANAGER')")
     @Operation(summary = "Get shops by owner", description = "Retrieve shops that belong to a specific owner/userId")
     @ApiResponse(responseCode = "200", description = "Successfully retrieved owner's shops",
         content = @Content(schema = @Schema(implementation = Shop.class)))
-    public ResponseEntity<List<Shop>> getShopsByOwner(@PathVariable String ownerId) {
+    public ResponseEntity<List<Shop>> getShopsByOwner(@PathVariable("ownerId") String ownerId) {
         List<Shop> shops = shopService.getShopsByOwner(ownerId);
         return ResponseEntity.ok(shops);
     }
@@ -46,7 +56,7 @@ public class ShopController {
     @DeleteMapping("/{shopId}")
     @PreAuthorize("hasRole('SHOP_MANAGER') and @shopService.isOwner(#shopId, authentication)")
     public ResponseEntity<DeactivateShopResponse> deactivateShop(
-            @PathVariable String shopId,
+            @PathVariable("shopId") String shopId,
             @RequestBody @Valid DeactivateShopRequest request) {
 
         if (!request.confirm()) { 
@@ -60,10 +70,51 @@ public class ShopController {
     @PutMapping("/{shopId}/profile")
     @PreAuthorize("hasRole('SHOP_MANAGER') and @shopService.isOwner(#shopId, authentication)")
     public ResponseEntity<ShopProfileResponse> updateProfile(
-            @PathVariable String shopId,
+            @PathVariable("shopId") String shopId,
             @RequestBody @Valid UpdateShopProfileRequest request) {
 
         ShopProfileResponse response = shopService.updateProfile(shopId, request);
         return ResponseEntity.ok(response);
+    }
+    @PostMapping
+    @PreAuthorize("hasRole('SHOP_MANAGER')")
+    @Operation(summary = "Create a new shop", description = "Creates a new shop. Strictly limited to 1 shop per manager.")
+    public ResponseEntity<ShopProfileResponse> createShop(
+            @RequestParam("ownerId") String ownerId, 
+            @RequestBody @Valid UpdateShopProfileRequest request) {
+        
+        if (ownerId == null || ownerId.trim().isEmpty()) {
+            throw new IllegalArgumentException("ownerId không được để trống!");
+        }
+
+        ShopProfileResponse response = shopService.createShop(request, ownerId);
+        return ResponseEntity.ok(response);
+    }
+
+    @PostMapping("/{shopId}/vendors/{vendorId}")
+    public ResponseEntity<String> assignVendorToShop(
+            @PathVariable("shopId") String shopId, 
+            @PathVariable("vendorId") String vendorId) {
+        shopService.assignVendorToShop(shopId, vendorId);
+        return ResponseEntity.ok("Assigned vendor " + vendorId + " to shop " + shopId + " successfully.");
+    }
+
+    @GetMapping("/my-assigned-shops")
+    public ResponseEntity<List<Shop>> getMyAssignedShops(
+            @RequestHeader("userId") String vendorId) {
+        return ResponseEntity.ok(shopService.getShopsAssignedToVendor(vendorId));
+    }
+
+    @GetMapping("/{shopId}/check-vendor/{vendorId}")
+    public ResponseEntity<Boolean> checkVendorAccess(
+            @PathVariable("shopId") String shopId, 
+            @PathVariable("vendorId") String vendorId) {
+        boolean hasAccess = shopService.checkVendorBelongsToShop(shopId, vendorId);
+        return ResponseEntity.ok(hasAccess);
+    }
+
+   @GetMapping("/search")
+    public ResponseEntity<List<Shop>> searchShops(@RequestParam("keyword") String keyword) {
+        return ResponseEntity.ok(shopService.searchShops(keyword));
     }
 }

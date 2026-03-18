@@ -6,6 +6,9 @@ import jakarta.persistence.*;
 import lombok.*;
 import java.time.LocalDateTime;
 
+import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.UpdateTimestamp;
+
 @Entity
 @Data
 @Builder
@@ -31,7 +34,8 @@ public class Shop {
     @Schema(description = "Description of the shop")
     private String description;
 
-    @Column(name = "logoUrl")
+    @Lob 
+    @Column(name = "logoUrl", columnDefinition = "LONGTEXT")
     @Schema(description = "URL of the shop logo")
     private String logoUrl;
 
@@ -50,4 +54,10 @@ public class Shop {
     @Column(name = "restoreUntil")
     @Schema(description = "Restoration deadline for deactivated shops")
     private LocalDateTime restoreUntil;
+
+    @CreationTimestamp
+    private LocalDateTime createdAt;
+
+    @UpdateTimestamp
+    private LocalDateTime updatedAt;
 }

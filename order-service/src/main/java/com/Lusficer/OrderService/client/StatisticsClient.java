@@ -5,12 +5,12 @@ import org.springframework.cloud.openfeign.FeignClient;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.List;
 import lombok.Data;
 import lombok.AllArgsConstructor;
 
-// "statistic-service" là tên application.name bạn đặt trong file properties của Service Thống kê
-@FeignClient(name = "statistic-service") 
+@FeignClient(name = "statistic-service", url= "http://localhost:8087") 
 public interface StatisticsClient {
 
     @PostMapping("/api/internal/stats/sync-order")
@@ -21,6 +21,7 @@ public interface StatisticsClient {
     class OrderCompletedEvent {
         private String shopId;
         private BigDecimal totalAmount;
+        private LocalDate orderDate;
         private List<ProductItemDto> items;
     }
 

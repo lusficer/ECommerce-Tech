@@ -11,7 +11,6 @@ import java.util.List;
 
 public interface InventoryRepository extends JpaRepository<Inventory, Long> {
     
-    // Khóa dòng dữ liệu khi đọc để trừ kho (Ngăn 2 người cùng mua 1 món cuối)
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT i FROM Inventory i WHERE i.productId = :productId")
     Optional<Inventory> findByProductIdLocked(@Param("productId") String productId);

@@ -2,25 +2,30 @@ package com.Lusficer.ProductService.service;
 
 import com.Lusficer.ProductService.client.InventoryClient;
 import com.Lusficer.ProductService.dto.*;
+import com.Lusficer.ProductService.dto.request.ProductRequestDTO;
 import com.Lusficer.ProductService.entity.*;
 import com.Lusficer.ProductService.repository.*;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
-
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.JpaSort;
 @Service
 public class ProductService {
 
     @Autowired private ProductRepository productRepository;
     @Autowired private ProductApprovalLogRepository logRepository;
     @Autowired private InventoryClient inventoryClient;
-
-    // --- VENDOR USE CASES (GIỮ NGUYÊN) ---
 
     @Transactional
     public Product createProduct(String shopId, ProductRequestDTO request) {
@@ -50,15 +55,66 @@ public class ProductService {
 
         return productRepository.save(product);
     }
+
+    @Transactional
+    public void deleteProduct(String productId) {
+        Product product = productRepository.findById(productId)
+                .orElseThrow(() -> new RuntimeException("Product not found"));
+        
+        product.setIsDeleted(true);
+        productRepository.save(product);
+    }
     
     public List<Product> getVendorProducts(String shopId) {
-        return productRepository.findByShopIdAndIsDeletedFalse(shopId);
+        List<Product> products = productRepository.findByShopIdAndIsDeletedFalse(shopId);
+
+        if (products.isEmpty()) {
+            return products;
+        }
+
+        List<String> productIds = products.stream()
+                .map(Product::getProductId)
+                .collect(Collectors.toList());
+
+        try {
+            Map<String, Integer> stockMap = inventoryClient.checkStockBatch(productIds);
+            
+            for (Product p : products) {
+                p.setStockQuantity(stockMap.getOrDefault(p.getProductId(), 0));
+            }
+        } catch (Exception e) {
+            System.err.println("Lỗi khi gọi InventoryService lấy số lượng: " + e.getMessage());
+        }
+
+        return products;
     }
 
-    // --- SHOP MANAGER USE CASES (GIỮ NGUYÊN) ---
     
-    public List<Product> getApprovalQueue() {
-        return productRepository.findByApprovalStatusOrderBySubmittedAtAsc(ApprovalStatus.PENDING);
+    public List<Product> getApprovalQueue(String shopId) {
+        List<Product> products = productRepository.findByShopIdAndApprovalStatusOrderBySubmittedAtAsc(shopId, ApprovalStatus.PENDING);
+        
+        if (products.isEmpty()) return products;
+
+        List<String> productIds = products.stream().map(Product::getProductId).collect(Collectors.toList());
+        try {
+            Map<String, Integer> stockMap = inventoryClient.checkStockBatch(productIds);
+            for (Product p : products) {
+                p.setStockQuantity(stockMap.getOrDefault(p.getProductId(), 0));
+            }
+        } catch (Exception e) {
+            System.err.println("Lỗi gọi Inventory cho Approval Queue: " + e.getMessage());
+        }
+
+        return products;
+    }
+
+    public List<ProductInternalDto> getProductsByCategory(String categoryId) {
+        org.springframework.data.domain.Pageable pageable = org.springframework.data.domain.PageRequest.of(0, 10, org.springframework.data.domain.Sort.by("submittedAt").descending());
+        
+        return productRepository.filterProducts(null, categoryId, null, null, null, pageable)
+                .getContent().stream()
+                .map(this::mapToInternalDtoSimple)
+                .collect(Collectors.toList());
     }
 
     @Transactional
@@ -72,8 +128,13 @@ public class ProductService {
 
         if (reviewDTO.isApproved()) {
             product.setApprovalStatus(ApprovalStatus.APPROVED);
+            
+            if (reviewDTO.getDiscountPercentage() != null) {
+                product.setDiscountPercentage(reviewDTO.getDiscountPercentage());
+            }
+
             log.setAction(ApprovalAction.APPROVE);
-            log.setComments("Product approved.");
+            log.setComments("Product approved with " + product.getDiscountPercentage() + "% discount.");
         } else {
             if (reviewDTO.getComments() == null || reviewDTO.getComments().isEmpty()) {
                 throw new RuntimeException("Comments are required for rejection");
@@ -92,9 +153,7 @@ public class ProductService {
                 .orElseThrow(() -> new RuntimeException("Product not found with ID: " + productId));
     }
 
-    // --- INTERNAL / CLIENT USE CASES ---
 
-    // Hàm cũ của bạn (Giữ nguyên - Dùng cho Cart/Order vì cần check tồn kho realtime)
     public ProductInternalDto getProductForInternal(String productId) {
         Product product = productRepository.findById(productId)
                 .orElseThrow(() -> new RuntimeException("Product not found"));
@@ -112,49 +171,78 @@ public class ProductService {
         return ProductInternalDto.builder()
                 .productId(product.getProductId())
                 .name(product.getName())
+                .description(product.getDescription())
+                .brand(product.getBrand())
+                .categoryId(product.getCategoryId())
+                .specifications(product.getSpecifications())
                 .mainImage(product.getImageUrl())
+                .discountPercentage(product.getDiscountPercentage())
                 .price(product.getPrice())
+                .averageRating(product.getAverageRating() != null ? product.getAverageRating() : 0.0)
+                .totalReviews(product.getTotalReviews() != null ? product.getTotalReviews() : 0)
                 .stock(currentStock)
                 .shopId(product.getShopId())
                 .build();
     }
 
-    // ---------------------------------------------------------
-    // [NEW] CÁC HÀM PHỤC VỤ RECOMMENDATION SERVICE
-    // ---------------------------------------------------------
+    @Transactional
+    public void updateProductDiscount(String productId, String shopId, int discountPercentage, String managerId) {
+        Product product = productRepository.findById(productId)
+                .orElseThrow(() -> new RuntimeException("Product not found"));
 
-    // 1. API Batch: Lấy thông tin cơ bản cho danh sách ID (Enrich Data)
-    // Lưu ý: Hàm này KHÔNG gọi Inventory để tránh làm chậm hệ thống (Recommendation Service đã tự gọi Inventory rồi)
+        if (!product.getShopId().equals(shopId)) {
+            throw new RuntimeException("Unauthorized access");
+        }
+
+        product.setDiscountPercentage(discountPercentage);
+        productRepository.save(product);
+
+        ProductApprovalLog log = new ProductApprovalLog();
+        log.setProductId(productId);
+        log.setActorId(managerId); 
+        log.setAction(ApprovalAction.APPROVE); 
+        log.setComments("Manager updated discount to " + discountPercentage + "%");
+        log.setCreatedAt(LocalDateTime.now()); 
+        logRepository.save(log);
+    }
+
+    
+
+   
     public List<ProductInternalDto> getProductsBatch(List<String> ids) {
         List<Product> products = productRepository.findByProductIdIn(ids);
         
         return products.stream()
-                .map(this::mapToInternalDtoSimple) // Dùng hàm map đơn giản (không gọi Inventory)
-                .collect(Collectors.toList());
+            .map(this::mapToInternalDtoSimple) 
+            .collect(Collectors.toList());
     }
 
-    // 2. API Trending: Lấy 10 sản phẩm mới nhất đã được duyệt (Fallback Cold Start)
-    public List<ProductInternalDto> getTrendingProducts() {
-        // Chỉ lấy hàng đã Approved
-        List<Product> products = productRepository.findTop10ByApprovalStatusOrderBySubmittedAtDesc(ApprovalStatus.APPROVED);
+    public List<ProductInternalDto> getPublicProductsByShopId(String shopId) {
+        List<Product> products = productRepository.findByShopIdAndApprovalStatusAndIsDeletedFalse(shopId, ApprovalStatus.APPROVED);
         
         return products.stream()
                 .map(this::mapToInternalDtoSimple)
                 .collect(Collectors.toList());
     }
 
-    public List<ProductInternalDto> searchProductsInternal(String keyword) {
-    // Tìm trong DB các sản phẩm có tên chứa keyword
-    List<Product> products = productRepository.findByNameContainingIgnoreCaseAndIsDeletedFalse(keyword);
-    
-    // Giới hạn lấy 5 cái thôi cho nhẹ
-    return products.stream()
+    public List<ProductInternalDto> getTrendingProducts() {
+        List<Product> products = productRepository.findTop10ByApprovalStatusAndIsDeletedFalseOrderBySoldCountDesc(ApprovalStatus.APPROVED);
+        
+        return products.stream()
+                .map(this::mapToInternalDtoSimple) 
+                .collect(Collectors.toList());
+    }
+
+        public List<ProductInternalDto> searchProductsInternal(String keyword) {
+        List<Product> products = productRepository.findByNameContainingIgnoreCaseAndIsDeletedFalse(keyword);
+        return products.stream()
             .limit(5)
             .map(this::mapToInternalDtoSimple)
             .collect(Collectors.toList());
-    }
+        }
 
-    // --- PRIVATE HELPERS ---
+
+
 
     private void mapDtoToEntity(ProductRequestDTO dto, Product entity) {
         entity.setName(dto.getName());
@@ -162,18 +250,46 @@ public class ProductService {
         entity.setDescription(dto.getDescription());
         entity.setCategoryId(dto.getCategoryId());
         entity.setImageUrl(dto.getImageUrl());
+        entity.setDiscountPercentage(dto.getDiscountPercentage() != null ? dto.getDiscountPercentage() : 0);
+        entity.setBrand(dto.getBrand());
+        entity.setSpecifications(dto.getSpecifications());
     }
 
-    // Mapper đơn giản: Chỉ lấy thông tin tĩnh (Tên, Giá, Ảnh)
-    // Giúp response nhanh, nhẹ gánh cho Recommendation Service
+   public Page<ProductInternalDto> filterProductsInternal(String keyword, String categoryId, String brand, Double minPrice, Double maxPrice, int page, int size, String sortOption) {
+        BigDecimal min = minPrice != null ? BigDecimal.valueOf(minPrice) : null;
+        BigDecimal max = maxPrice != null ? BigDecimal.valueOf(maxPrice) : null;
+
+        Sort sorting = Sort.unsorted();
+
+    if ("price_asc".equals(sortOption)) {
+        sorting = JpaSort.unsafe(Sort.Direction.ASC, "(price * (1.0 - (COALESCE(discountPercentage, 0) / 100.0)))");
+    } else if ("price_desc".equals(sortOption)) {
+        sorting = JpaSort.unsafe(Sort.Direction.DESC, "(price * (1.0 - (COALESCE(discountPercentage, 0) / 100.0)))");
+    } else {
+        sorting = Sort.by(Sort.Direction.DESC, "createdAt");
+    }
+
+    Pageable pageable = PageRequest.of(page, size, sorting);
+        Page<Product> productPage = productRepository.filterProducts(keyword, categoryId, brand, min, max, pageable);
+        
+        return productPage.map(this::mapToInternalDtoSimple);
+    }
+
     private ProductInternalDto mapToInternalDtoSimple(Product p) {
         return ProductInternalDto.builder()
                 .productId(p.getProductId())
                 .name(p.getName())
+                .description(p.getDescription())
+                .brand(p.getBrand())
+                .categoryId(p.getCategoryId())
+                .specifications(p.getSpecifications())
                 .price(p.getPrice())
-                .mainImage(p.getImageUrl()) // Đảm bảo DTO có field này (hoặc imageUrl)
+                .mainImage(p.getImageUrl()) 
                 .shopId(p.getShopId())
-                .stock(0) // Mặc định 0 vì Recommendation Service sẽ tự check tồn kho từ Inventory Service
+                .stock(0) 
+                .averageRating(p.getAverageRating() != null ? p.getAverageRating() : 0.0)
+                .totalReviews(p.getTotalReviews() != null ? p.getTotalReviews() : 0)
+                .discountPercentage(p.getDiscountPercentage() != null ? p.getDiscountPercentage() : 0)
                 .build();
     }
 }

@@ -37,7 +37,7 @@ public class SecurityConfig {
             .cors(cors -> cors.configurationSource(corsConfigurationSource())) 
             
             .authorizeHttpRequests(auth -> auth
-                .requestMatchers("/").permitAll()      // Cho phép trang chủ
+                .requestMatchers("/").permitAll()      
                 .requestMatchers("/error").permitAll()
                 .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                 .requestMatchers("/v3/api-docs/**",
@@ -48,6 +48,8 @@ public class SecurityConfig {
                 .requestMatchers("/api/public/**").permitAll()
                 .requestMatchers("/api/manager/**").authenticated()
                 .requestMatchers("/api/internal/**").permitAll()
+                .requestMatchers(HttpMethod.GET, "/api/categories/**").permitAll()
+                .requestMatchers("/api/products/**").authenticated()
                 .requestMatchers("/api/vendor/**").authenticated()
                 .requestMatchers("/api/warehouse/**").authenticated()
                 .anyRequest().authenticated()
@@ -70,10 +72,12 @@ public class SecurityConfig {
         
         configuration.setAllowedOrigins(List.of(
             "http://localhost:8080", 
+            "http://localhost:3000", 
             "http://192.168.1.237:8080",
             "http://192.168.1.200:8080", 
             "http://10.238.45.231:8080",
-            "http://192.168.1.107:8080"
+            "http://192.168.1.107:8080",
+            "http://localhost:3000"
         ));
         
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));

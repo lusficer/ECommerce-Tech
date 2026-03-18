@@ -13,9 +13,9 @@ public class InventoryResponse {
     private String productId;
     private String sku;
     
-    private Integer totalQuantity;      // Tổng số lượng trong kho
-    private Integer reservedQuantity;   // Số lượng đang bị giữ
-    private Integer availableQuantity;  // Số lượng thực tế có thể bán (Total - Reserved)
+    private Integer totalQuantity;      
+    private Integer reservedQuantity;   
+    private Integer availableQuantity;  
     
-    private Integer safetyStockLevel;   // Mức cảnh báo
+    private Integer safetyStockLevel;   
 }

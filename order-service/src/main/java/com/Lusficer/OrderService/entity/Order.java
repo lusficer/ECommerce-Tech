@@ -26,6 +26,8 @@ public class Order {
 
     private String paymentMethod;
 
+    @Column(name = "shipperId")
+    private String shipperId;
     @Enumerated(EnumType.STRING)
     private PaymentStatus paymentStatus;
 

@@ -7,5 +7,5 @@ public class ProductDto {
     private String productId;
     private String name;
     private Double price;
-    private String imageUrl;
+    private String mainImage;
 }

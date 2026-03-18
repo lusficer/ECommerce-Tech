@@ -8,9 +8,9 @@ public class RecommendationItemDto {
     private String productId;
     private String name;
     private Double price;
-    private String imageUrl;
+    private String mainImage;
     
-    private Integer stockLeft; // Tồn kho thực tế
-    private String badge;      // Nhãn FOMO (🔥 SẮP CHÁY HÀNG)
-    private String reason;     // Lý do gợi ý
+    private Integer stockLeft; 
+    private String badge;      
+    private String reason;    
 }

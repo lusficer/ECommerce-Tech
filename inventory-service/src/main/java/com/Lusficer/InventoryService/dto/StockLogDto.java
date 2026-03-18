@@ -16,8 +16,8 @@ public class StockLogDto {
     private String productId;
     private String orderId;
     private StockLog.LogType type; // IMPORT, RESERVE, RELEASE...
-    private Integer changeAmount;  // Số lượng thay đổi (+/-)
-    private Integer currentStock;  // Tồn kho tại thời điểm đó
+    private Integer changeAmount;  
+    private Integer currentStock; 
     private String note;
     private LocalDateTime createdAt;
 }

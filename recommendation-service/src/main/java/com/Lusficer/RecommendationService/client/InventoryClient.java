@@ -6,7 +6,6 @@ import org.springframework.web.bind.annotation.RequestParam;
 import java.util.List;
 import java.util.Map;
 
-// Gọi sang Inventory Service (Port 8089)
 @FeignClient(name = "inventory-service", url = "http://localhost:8089") 
 public interface InventoryClient {
     @GetMapping("/api/internal/inventory/check-stock") 

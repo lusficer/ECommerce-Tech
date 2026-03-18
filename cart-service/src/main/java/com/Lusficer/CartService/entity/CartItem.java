@@ -15,16 +15,16 @@ public class CartItem {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "cartId")
-    @JsonIgnore // Chặn vòng lặp vô tận khi convert JSON
+    @JsonIgnore 
     @ToString.Exclude
     private Cart cart;
 
     private String productId;
-    private String shopId;       // Lưu để sau này tách đơn theo Shop
-    private String productName;  // Snapshot tên
-    private String productImage; // Snapshot ảnh
-
+    private String shopId;       
+    private String productName;  
+    private String productImage; 
+    private Integer discountPercentage;
     private Integer quantity;
     private BigDecimal unitPrice;
-    private BigDecimal subTotal; // = quantity * unitPrice
+    private BigDecimal subTotal; 
 }

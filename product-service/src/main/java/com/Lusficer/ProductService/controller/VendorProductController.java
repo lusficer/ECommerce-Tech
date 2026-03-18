@@ -1,6 +1,6 @@
 package com.Lusficer.ProductService.controller;
 
-import com.Lusficer.ProductService.dto.ProductRequestDTO;
+import com.Lusficer.ProductService.dto.request.ProductRequestDTO;
 import com.Lusficer.ProductService.entity.Product;
 import com.Lusficer.ProductService.service.ProductService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -28,7 +28,6 @@ public class VendorProductController {
     @Autowired
     private ProductService productService;
 
-    // UC: Manage Product Listing (Create) 
     @PostMapping
     @PreAuthorize("hasRole('VENDOR')")
     @Operation(
@@ -50,7 +49,6 @@ public class VendorProductController {
         return ResponseEntity.ok(productService.createProduct(shopId, request));
     }
 
-    // UC: Manage Product Listing (Update) 
     @PutMapping("/{productId}")
     @PreAuthorize("hasRole('VENDOR')")
     @Operation(
@@ -73,7 +71,6 @@ public class VendorProductController {
         return ResponseEntity.ok(productService.updateProduct(productId, shopId, request));
     }
 
-    // UC: View Approval Status [cite: 8]
     @GetMapping
     @PreAuthorize("hasRole('VENDOR')")
     @Operation(
@@ -90,5 +87,12 @@ public class VendorProductController {
     @ApiResponse(responseCode = "403", description = "Forbidden - insufficient permissions (VENDOR role required)")
     public ResponseEntity<List<Product>> getMyProducts(@RequestHeader("X-Shop-Id") String shopId) {
         return ResponseEntity.ok(productService.getVendorProducts(shopId));
+    }
+
+    @DeleteMapping("/{productId}")
+    @PreAuthorize("hasAnyAuthority('ROLE_VENDOR','ROLE_SELLER')")
+    public ResponseEntity<Void> deleteProductVendor(@PathVariable String productId) {
+        productService.deleteProduct(productId);
+        return ResponseEntity.ok().build();
     }
 }

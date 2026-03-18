@@ -19,21 +19,34 @@ import java.util.List;
 @RequestMapping("/api/manager/orders")
 @SecurityRequirement(name = "Bearer Token")
 @Tag(name = "Manager Order", description = "Order verification and monitoring for Managers")
-@PreAuthorize("hasRole('ROLE_SHOP_MANAGER')") // Chỉ Shop Manager mới gọi được
+@PreAuthorize("hasRole('ROLE_SHOP_MANAGER')") 
 public class OrderManagerController {
 
     @Autowired private OrderService orderService;
     @Autowired private OrderRepository orderRepository;
 
-    // UC: Verify Order (Lấy list cần duyệt)
-    @GetMapping("/pending-verification")
-    @Operation(summary = "Get all orders pending verification")
-    public ResponseEntity<List<Order>> getPendingVerificationOrders(
-             @RequestHeader("managerId") String managerId) {
-        return ResponseEntity.ok(orderRepository.findByOrderStatus(OrderStatus.PENDING_VERIFICATION));
+    // [MỚI] Lấy TOÀN BỘ đơn hàng của Shop để Manager có cái nhìn tổng quan
+    @GetMapping("/shop/{shopId}/all")
+    @Operation(summary = "Get all orders of the shop")
+    public ResponseEntity<List<Order>> getAllShopOrders(@PathVariable("shopId") String shopId) {
+        return ResponseEntity.ok(orderRepository.findByShopIdOrderByCreatedAtDesc(shopId));
     }
 
-    // UC: Verify Order (Hành động duyệt)
+    // [ĐÃ SỬA] Lấy list cần duyệt CỦA RIÊNG SHOP ĐÓ
+    @GetMapping("/shop/{shopId}/pending-verification")
+    @Operation(summary = "Get all orders pending verification for a specific shop")
+    public ResponseEntity<List<Order>> getPendingVerificationOrders(@PathVariable("shopId") String shopId) {
+        return ResponseEntity.ok(orderRepository.findByShopIdAndOrderStatus(shopId, OrderStatus.PENDING_VERIFICATION));
+    }
+
+    // [ĐÃ SỬA] Lấy đơn đang giao CỦA RIÊNG SHOP ĐÓ
+    @GetMapping("/shop/{shopId}/shipping")
+    @Operation(summary = "Monitor ongoing shipments for a specific shop")
+    public ResponseEntity<List<Order>> getShippingOrders(@PathVariable("shopId") String shopId) {
+        return ResponseEntity.ok(orderRepository.findByShopIdAndOrderStatus(shopId, OrderStatus.SHIPPING));
+    }
+
+    // UC: Verify Order (Hành động duyệt - Giữ nguyên)
     @PutMapping("/{orderId}/verify")
     @Operation(summary = "Approve or Reject an order")
     public ResponseEntity<Order> verifyOrder(
@@ -43,13 +56,5 @@ public class OrderManagerController {
         
         request.setManagerId(managerId);
         return ResponseEntity.ok(orderService.verifyOrder(orderId, request));
-    }
-    
-    // UC: Monitor Shipments
-    @GetMapping("/shipping")
-    @Operation(summary = "Monitor all ongoing shipments")
-    public ResponseEntity<List<Order>> getShippingOrders(
-            @RequestHeader("managerId") String managerId) {
-        return ResponseEntity.ok(orderRepository.findByOrderStatus(OrderStatus.SHIPPING));
     }
 }

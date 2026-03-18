@@ -1,9 +1,9 @@
 package com.Lusficer.UserService.service;
 
 import com.Lusficer.UserService.dto.AccountStatusDTO;
-import com.Lusficer.UserService.dto.DeactivateAccountRequest;
-import com.Lusficer.UserService.dto.DeactivateAccountResponse;
-import com.Lusficer.UserService.dto.DeactivationRequestDTO;
+import com.Lusficer.UserService.dto.request.DeactivateAccountRequest;
+import com.Lusficer.UserService.dto.request.DeactivationRequestDTO;
+import com.Lusficer.UserService.dto.response.DeactivateAccountResponse;
 import com.Lusficer.UserService.entity.UserProfile;
 import com.Lusficer.UserService.entity.UserRole;
 import com.Lusficer.UserService.entity.UserRole.RoleName;
@@ -124,6 +124,7 @@ public class AccountManagementService {
             case VENDOR -> "V";
             case GUEST -> "G";
             case WAREHOUSE_MANAGER -> "WM";
+            case SHIPPER ->  "SH"; 
         };
 
         long count = userRoleRepository.count() + 1;

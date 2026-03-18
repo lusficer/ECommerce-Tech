@@ -37,7 +37,7 @@ public class SecurityConfig {
             .cors(cors -> cors.configurationSource(corsConfigurationSource())) 
             
             .authorizeHttpRequests(auth -> auth
-                .requestMatchers("/").permitAll()      // Cho phép trang chủ
+                .requestMatchers("/").permitAll()    
                 .requestMatchers("/error").permitAll()
                 .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                 .requestMatchers("/v3/api-docs/**",
@@ -70,6 +70,7 @@ public class SecurityConfig {
         
         configuration.setAllowedOrigins(List.of(
             "http://localhost:8080", 
+            "http://localhost:3000", 
             "http://192.168.100.21:8080",
             "http://192.168.1.200:8080", 
             "http://10.238.45.231:8080",

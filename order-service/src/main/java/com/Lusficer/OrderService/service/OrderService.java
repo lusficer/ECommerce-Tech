@@ -10,6 +10,7 @@ import com.Lusficer.OrderService.enums.PaymentStatus;
 import com.Lusficer.OrderService.exception.InvalidOrderOperationException;
 import com.Lusficer.OrderService.exception.ResourceNotFoundException;
 import com.Lusficer.OrderService.exception.UnauthorizedAccessException;
+import com.Lusficer.OrderService.exception.BadRequestException;
 import com.Lusficer.OrderService.repository.OrderRepository;
 import com.Lusficer.OrderService.repository.OrderTrackingRepository;
 
@@ -18,13 +19,14 @@ import feign.FeignException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
+import jakarta.servlet.http.HttpServletRequest;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
-
+import java.util.Map;
+import java.util.HashMap;
 @Service
 public class OrderService {
 
@@ -32,10 +34,11 @@ public class OrderService {
     @Autowired private OrderTrackingRepository trackingRepository;
     @Autowired private StatisticsClient statisticsClient;   
     @Autowired private InventoryClient inventoryClient;
+    @Autowired private VNPayService vnPayService; 
     // --- LOGIC FOR USER ---
 
     @Transactional(rollbackFor = Exception.class) // Đảm bảo rollback nếu lỗi kho
-    public Order placeOrder(PlaceOrderRequest request) {
+    public Map<String, Object> placeOrder(PlaceOrderRequest request, HttpServletRequest httpRequest) {
         String orderId = "ORD-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
 
         // 1. Calculate prices
@@ -46,7 +49,6 @@ public class OrderService {
         Order order = new Order();
         order.setOrderId(orderId);
 
-        // [NEW] LOGIC GIỮ HÀNG (RESERVE)
         // Duyệt qua từng sản phẩm để tính tiền VÀ giữ chỗ bên kho
         for (OrderItemRequest itemReq : request.getItems()) {
             
@@ -83,7 +85,7 @@ public class OrderService {
         }
 
         // [LOGIC CŨ GIỮ NGUYÊN] ...
-        BigDecimal shippingFee = new BigDecimal("30000"); 
+        BigDecimal shippingFee = new BigDecimal("5"); 
         BigDecimal grandTotal = subTotal.add(shippingFee);
 
         order.setUserId(request.getUserId());
@@ -95,7 +97,7 @@ public class OrderService {
         order.setPaymentMethod(request.getPaymentMethod());
         order.setPaymentStatus(PaymentStatus.PENDING);
         
-        if (grandTotal.compareTo(new BigDecimal("50000000")) > 0) {
+        if (grandTotal.compareTo(new BigDecimal("2000")) > 0) {
             order.setOrderStatus(OrderStatus.PENDING_VERIFICATION);
         } else {
             order.setOrderStatus(OrderStatus.NEW);
@@ -115,11 +117,64 @@ public class OrderService {
         order.setOrderAddress(address);
 
         Order savedOrder = orderRepository.save(order);
-
         createTrackingLog(savedOrder, "Order Created", "Waiting for seller confirmation", "PENDING", null, null);
 
-        return savedOrder;
+        // --- [MỚI] LOGIC VNPAY ---
+        String paymentUrl = null;
+        if ("VNPAY".equalsIgnoreCase(request.getPaymentMethod())) {
+            paymentUrl = vnPayService.createPaymentUrl(savedOrder.getOrderId(), savedOrder.getGrandTotal(), httpRequest, savedOrder.getShopId());      
+        }
+
+        // Trả kết quả về cho Controller
+        Map<String, Object> response = new HashMap<>();
+        response.put("orderId", savedOrder.getOrderId());
+        response.put("paymentUrl", paymentUrl); // Nếu COD thì cái này sẽ là null
+        return response;
     }
+
+    @Transactional
+    public String processVNPayReturn(Map<String, String> params) {
+        String orderId = params.get("vnp_TxnRef");
+        String responseCode = params.get("vnp_ResponseCode");
+        
+        boolean isValid = vnPayService.verifyPayment(params);
+        
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new ResourceNotFoundException("Order not found"));
+
+        if (!isValid) {
+            order.setPaymentStatus(PaymentStatus.FAILED);
+            order.setOrderStatus(OrderStatus.CANCELLED); // Hacker can thiệp -> Hủy đơn
+            orderRepository.save(order);
+            return "signature_failed";
+        }
+
+        if ("00".equals(responseCode)) {
+            // [THANH TOÁN THÀNH CÔNG]
+            order.setPaymentStatus(PaymentStatus.PAID); 
+            // orderStatus giữ nguyên (NEW hoặc PENDING_VERIFICATION) chờ xử lý tiếp
+            orderRepository.save(order);
+            createTrackingLog(order, "Payment Success", "Customer paid via VNPay successfully.", "PENDING", null, null);
+            return "success";
+        } else {
+            // [THANH TOÁN THẤT BẠI / KHÁCH HỦY]
+            order.setPaymentStatus(PaymentStatus.FAILED);
+            order.setOrderStatus(OrderStatus.CANCELLED); // Hủy luôn đơn hàng
+            orderRepository.save(order);
+            
+            // Gọi sang Inventory Service để nhả lại hàng vào kho
+            try {
+                inventoryClient.releaseStock(orderId);
+                System.out.println("Stock released for unpaid order: " + orderId);
+            } catch (Exception e) {
+                System.err.println("Warning: Failed to release stock for order " + orderId);
+            }
+
+            createTrackingLog(order, "Payment Failed", "Transaction cancelled or failed.", "PENDING", null, null);
+            return "payment_failed";
+        }
+    }
+
     public void cancelOrder(String orderId, String userId) {
         Order order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new ResourceNotFoundException("Order not found with ID: " + orderId)); 
@@ -165,16 +220,6 @@ public class OrderService {
 
         String existingShipmentId = getExistingShipmentId(orderId);
         createTrackingLog(savedOrder, "Order Completed", "Customer confirmed receipt", existingShipmentId, null, null);
-        
-        try {
-            inventoryClient.confirmSale(orderId);
-            System.out.println("✅ Inventory confirmed/deducted for order: " + orderId);
-        } catch (Exception e) {
-            // Log lỗi warning, không throw exception để chặn người dùng
-            // Vì đơn đã hoàn thành rồi, nếu lỗi kho thì admin xử lý sau
-            System.err.println("⚠️ Warning: Failed to confirm inventory for completed order: " + e.getMessage());
-        }
-
 
         try {
             List<StatisticsClient.ProductItemDto> itemDtos = savedOrder.getOrderItems().stream()
@@ -188,6 +233,7 @@ public class OrderService {
             StatisticsClient.OrderCompletedEvent event = new StatisticsClient.OrderCompletedEvent(
                 savedOrder.getShopId(),
                 savedOrder.getGrandTotal(),
+                savedOrder.getUpdatedAt().toLocalDate(),
                 itemDtos
             );
             statisticsClient.syncOrder(event);
@@ -262,6 +308,8 @@ public class OrderService {
 
         return orderRepository.save(order);
     }
+
+   
     
     // --- HELPER METHODS ---
 

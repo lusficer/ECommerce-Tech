@@ -16,7 +16,7 @@ public class StockCleanupScheduler {
     @Autowired private ReservationRepository reservationRepo;
     @Autowired private StockLogRepository logRepo; 
 
-    // Chạy mỗi 1 phút một lần
+    // Runs every 1 minute
    @Scheduled(fixedRate = 60000)
     @Transactional
     public void releaseExpiredStock() {
@@ -29,7 +29,7 @@ public class StockCleanupScheduler {
                 inventory.setReservedQuantity(inventory.getReservedQuantity() - res.getQuantity());
                 inventoryRepo.save(inventory);
                 
-                // [NEW] Ghi log hệ thống tự quét
+                // [NEW] Log system auto cleanup
                 StockLog log = StockLog.builder()
                         .productId(res.getProductId())
                         .orderId(res.getOrderId())

@@ -4,5 +4,5 @@ import lombok.Data;
 
 @Data
 public class UpdateItemRequest {
-    private Integer quantity; // Số lượng mới
+    private Integer quantity;
 }

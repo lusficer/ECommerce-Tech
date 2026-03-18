@@ -47,6 +47,7 @@ public class SecurityConfig {
                 .requestMatchers("/actuator/**").permitAll()
                 .requestMatchers("/api/public/**").permitAll()
                 .requestMatchers("/api/manager/**").authenticated()
+                .requestMatchers("/api/user/orders/vnpay-return").permitAll()
                 .requestMatchers("/api/internal/**").permitAll()
                 .requestMatchers("/api/vendor/**").authenticated()
                 .requestMatchers("/api/warehouse/**").authenticated()
@@ -70,6 +71,7 @@ public class SecurityConfig {
         
         configuration.setAllowedOrigins(List.of(
             "http://localhost:8080", 
+            "http://localhost:3000", 
             "http://192.168.100.21:8080",
             "http://192.168.1.200:8080", 
             "http://10.238.45.231:8080",

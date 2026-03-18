@@ -1,7 +1,7 @@
 package com.Lusficer.UserService.controller;
 
-import com.Lusficer.UserService.dto.SecurityUpdateRequest;
-import com.Lusficer.UserService.dto.SecurityUpdateResponse;
+import com.Lusficer.UserService.dto.request.SecurityUpdateRequest;
+import com.Lusficer.UserService.dto.response.SecurityUpdateResponse;
 import com.Lusficer.UserService.service.SecurityService;
 import com.Lusficer.UserService.config.JwtTokenProvider;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -22,7 +22,7 @@ public class SecurityController {
     private final JwtTokenProvider jwtTokenProvider;
 
     @PutMapping("/security")
-    @PreAuthorize("hasRole('SHOP_MANAGER')")
+    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<SecurityUpdateResponse> updateSecurity(
             @RequestBody @Valid SecurityUpdateRequest request,
             Authentication auth) {

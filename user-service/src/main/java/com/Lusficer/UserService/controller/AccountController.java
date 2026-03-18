@@ -1,9 +1,9 @@
 package com.Lusficer.UserService.controller;
 
 import com.Lusficer.UserService.dto.AccountStatusDTO;
-import com.Lusficer.UserService.dto.DeactivateAccountRequest;
-import com.Lusficer.UserService.dto.DeactivateAccountResponse;
-import com.Lusficer.UserService.dto.DeactivationRequestDTO;
+import com.Lusficer.UserService.dto.request.DeactivateAccountRequest;
+import com.Lusficer.UserService.dto.request.DeactivationRequestDTO;
+import com.Lusficer.UserService.dto.response.DeactivateAccountResponse;
 import com.Lusficer.UserService.entity.UserProfile;
 import com.Lusficer.UserService.entity.UserRole;
 import com.Lusficer.UserService.entity.UserPayment;
@@ -34,7 +34,6 @@ public class AccountController {
     @Autowired
     private AccountManagementService accountService;
 
-    // ✅ View account status
     @GetMapping("/status/{userId}")
     @PreAuthorize("isAuthenticated()")
     @Operation(
@@ -64,7 +63,6 @@ public class AccountController {
                 .orElse(ResponseEntity.notFound().build());
     }
 
-    // ✅ Update account details
     @PutMapping("/details/{userId}")
     @Operation(summary = "Update account details", description = "Updates the account details for a given userId")
     @ApiResponse(
@@ -88,7 +86,6 @@ public class AccountController {
         return ResponseEntity.ok(accountService.updateAccountDetails(userId, details));
     }
 
-    // ✅ Manage account role
     @PostMapping("/role/{userId}")
     @Operation(summary = "Manage account role", description = "Assigns or updates a role for a given userId")
     @ApiResponse(
@@ -112,7 +109,6 @@ public class AccountController {
         return ResponseEntity.ok(accountService.manageAccountRole(userId, role));
     }
 
-    // ✅ Update payment info
     @PutMapping("/payment/{userId}")
     @Operation(summary = "Update payment info", description = "Updates the payment information for a given userId")
     @ApiResponse(
@@ -136,8 +132,8 @@ public class AccountController {
         return ResponseEntity.ok(accountService.updatePaymentInfo(userId, paymentDetails));
     }
 
-    // ✅ Get all users
     @GetMapping("/users")
+    @PreAuthorize("hasRole('ADMIN')")
     @Operation(summary = "Get all users", description = "Returns list of all registered users")
     @ApiResponse(
         responseCode = "200",
@@ -153,7 +149,6 @@ public class AccountController {
         return ResponseEntity.ok(accountService.getAllUsers());
     }
 
-    // ✅ Request account deactivation (ADMIN can request for any user)
     @PostMapping("/deactivate/{userId}")
     @PreAuthorize("hasRole('ADMIN')")
     @Operation(summary = "Request account deactivation", description = "User requests account deactivation. Goes to admin for approval.")
@@ -173,7 +168,6 @@ public class AccountController {
         return ResponseEntity.ok(accountService.requestDeactivation(userId, request));
     }
 
-    // ✅ Request account deactivation for the currently authenticated user
     @PostMapping("/deactivate/me")
     @PreAuthorize("isAuthenticated()")
     @Operation(summary = "Request account deactivation (self)", description = "Authenticated user requests their own account deactivation. Goes to admin for approval.")
@@ -189,7 +183,6 @@ public class AccountController {
         return ResponseEntity.ok(accountService.requestDeactivation(currentUserId, request));
     }
 
-    // ✅ Get pending deactivation requests (Admin only)
     @GetMapping("/deactivate/pending")
     @PreAuthorize("hasRole('ADMIN')")
     @Operation(summary = "Get pending deactivation requests", description = "Returns list of pending account deactivation requests. Admin only.")
@@ -207,7 +200,6 @@ public class AccountController {
         return ResponseEntity.ok(accountService.getPendingRequests());
     }
 
-    // ✅ Approve deactivation request (Admin only)
     @PutMapping("/deactivate/approve/{requestId}")
     @PreAuthorize("hasRole('ADMIN')")
     @Operation(summary = "Approve deactivation request", description = "Admin approves deactivation request and deletes account. Admin only.")
@@ -233,7 +225,6 @@ public class AccountController {
         return ResponseEntity.ok(accountService.approveDeactivation(requestId, adminId, reason));
     }
 
-    // ✅ Reject deactivation request (Admin only)
     @PutMapping("/deactivate/reject/{requestId}")
     @PreAuthorize("hasRole('ADMIN')")
     @Operation(summary = "Reject deactivation request", description = "Admin rejects deactivation request. Account remains active. Admin only.")

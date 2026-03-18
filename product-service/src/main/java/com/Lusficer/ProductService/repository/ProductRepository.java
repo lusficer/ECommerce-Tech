@@ -3,22 +3,38 @@ package com.Lusficer.ProductService.repository;
 import com.Lusficer.ProductService.entity.ApprovalStatus;
 import com.Lusficer.ProductService.entity.Product;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import java.util.List;
 
 public interface ProductRepository extends JpaRepository<Product, String> {
     
-    // Các hàm cũ của bạn (giữ nguyên)
     List<Product> findByShopIdAndIsDeletedFalse(String shopId);
-    List<Product> findByApprovalStatusOrderBySubmittedAtAsc(ApprovalStatus status);
 
-    // --- [MỚI] Dành cho Internal API ---
     
-    // 1. Tìm nhiều sản phẩm theo danh sách ID (Batch)
+    List<Product> findByShopIdAndApprovalStatusOrderBySubmittedAtAsc(String shopId, ApprovalStatus status);
+
     List<Product> findByProductIdIn(List<String> productIds);
 
-    // 2. Tìm 10 sản phẩm ĐÃ DUYỆT mới nhất (Trending Fallback)
-    // Sắp xếp theo ngày nộp (submittedAt) giảm dần
     List<Product> findTop10ByApprovalStatusOrderBySubmittedAtDesc(ApprovalStatus status);
 
+    List<Product> findByShopIdAndApprovalStatusAndIsDeletedFalse(String shopId, ApprovalStatus status);
+
+    List<Product> findTop10ByApprovalStatusAndIsDeletedFalseOrderBySoldCountDesc(ApprovalStatus status);
+
     List<Product> findByNameContainingIgnoreCaseAndIsDeletedFalse(String keyword);
+    
+    @Query("SELECT p FROM Product p WHERE " +
+           "(:keyword IS NULL OR LOWER(p.name) LIKE LOWER(CONCAT('%', :keyword, '%'))) AND " +
+           "(:categoryId IS NULL OR p.categoryId = :categoryId) AND " +
+           "(:brand IS NULL OR LOWER(p.name) LIKE LOWER(CONCAT('%', :brand, '%'))) AND " +
+           "(:minPrice IS NULL OR (p.price * (1.0 - (COALESCE(p.discountPercentage, 0) / 100.0))) >= :minPrice) AND " +
+           "(:maxPrice IS NULL OR (p.price * (1.0 - (COALESCE(p.discountPercentage, 0) / 100.0))) <= :maxPrice)")
+    org.springframework.data.domain.Page<Product> filterProducts(
+                                 @Param("keyword") String keyword,
+                                 @Param("categoryId") String categoryId,
+                                 @Param("brand") String brand, 
+                                 @Param("minPrice") java.math.BigDecimal minPrice,
+                                 @Param("maxPrice") java.math.BigDecimal maxPrice,
+                                 org.springframework.data.domain.Pageable pageable);
 }

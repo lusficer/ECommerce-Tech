@@ -15,10 +15,10 @@ public class StockLog {
     private String orderId;
     
     @Enumerated(EnumType.STRING)
-    private LogType type; // Enum: IMPORT, RESERVE, CONFIRM_SALE, RELEASE
+    private LogType type; 
     
     private Integer changeAmount;
-    private Integer currentStock; // Lưu lại số tồn kho tại thời điểm log
+    private Integer currentStock; 
     private String note;
     
     private LocalDateTime createdAt;

@@ -21,7 +21,6 @@ public class InventoryService {
     @Autowired private ReservationRepository reservationRepo;
     @Autowired private StockLogRepository logRepo; 
 
-    // 1. Giữ hàng (RESERVE)
     @Transactional
     public boolean reserveStock(String productId, int quantity, String orderId) {
         Inventory inventory = inventoryRepo.findByProductIdLocked(productId)
@@ -44,11 +43,10 @@ public class InventoryService {
                 .build();
         reservationRepo.save(res);
         
-        saveLog(productId, orderId, StockLog.LogType.RESERVE, quantity, inventory.getQuantity(), "Giữ hàng cho đơn " + orderId);
+        saveLog(productId, orderId, StockLog.LogType.RESERVE, quantity, inventory.getQuantity(), "Reserve stock for order " + orderId);
         return true;
     }
 
-    // 2. Chốt đơn (CONFIRM_SALE)
     @Transactional
     public void confirmSale(String orderId) {
         List<InventoryReservation> reservations = reservationRepo.findByOrderId(orderId);
@@ -63,11 +61,10 @@ public class InventoryService {
             inventoryRepo.save(inventory);
             reservationRepo.delete(res);
 
-            saveLog(res.getProductId(), orderId, StockLog.LogType.CONFIRM_SALE, -res.getQuantity(), inventory.getQuantity(), "Đã bán");
+            saveLog(res.getProductId(), orderId, StockLog.LogType.CONFIRM_SALE, -res.getQuantity(), inventory.getQuantity(), "Sold");
         }
     }
 
-    // 3. Nhả hàng (RELEASE)
     @Transactional
     public void releaseStock(String orderId) {
         List<InventoryReservation> reservations = reservationRepo.findByOrderId(orderId);
@@ -78,13 +75,12 @@ public class InventoryService {
                 inventory.setReservedQuantity(inventory.getReservedQuantity() - res.getQuantity());
                 inventoryRepo.save(inventory);
                 
-                saveLog(res.getProductId(), orderId, StockLog.LogType.RELEASE, res.getQuantity(), inventory.getQuantity(), "Hủy đơn - Nhả hàng");
+                saveLog(res.getProductId(), orderId, StockLog.LogType.RELEASE, res.getQuantity(), inventory.getQuantity(), "Order cancelled - Release stock");
             }
             reservationRepo.delete(res);
         }
     }
 
-    // [FIX] Thêm hàm này để Controller gọi không bị lỗi
     public Integer getAvailableStock(String productId) {
         Inventory i = inventoryRepo.findByProductId(productId).orElse(null);
         if (i == null) return 0;
@@ -93,20 +89,14 @@ public class InventoryService {
 
     @Transactional
     public Map<String, Integer> getStockStatus(List<String> productIds) {
-        // 1. Query Database 1 lần duy nhất (Batch Query)
         List<Inventory> inventories = inventoryRepo.findByProductIdIn(productIds);
 
-        // 2. Chuyển List thành Map<ProductId, Quantity>
         Map<String, Integer> stockMap = inventories.stream()
                 .collect(Collectors.toMap(
                         Inventory::getProductId,
-                        // Lưu ý: Ở đây trả về số lượng CÓ THỂ BÁN (Available) hay TỔNG TỒN (Physical)?
-                        // Để tạo hiệu ứng FOMO chuẩn, ta nên dùng (Quantity - Reserved)
                         i -> i.getQuantity() - i.getReservedQuantity()
                 ));
 
-        // 3. Những sản phẩm ID có trong list yêu cầu nhưng không có trong DB
-        // (nghĩa là chưa nhập kho bao giờ), ta gán bằng 0.
         for (String id : productIds) {
             stockMap.putIfAbsent(id, 0);
         }
@@ -114,22 +104,20 @@ public class InventoryService {
         return stockMap;
     }
 
-    // Xem chi tiết
     public InventoryResponse getInventoryDetail(String productId) {
         Inventory i = inventoryRepo.findByProductId(productId)
                 .orElseThrow(() -> new RuntimeException("Product not found"));
         
         return InventoryResponse.builder()
                 .productId(i.getProductId())
-                .sku(i.getSku()) // Entity đã thêm sku nên dòng này hết lỗi
+                .sku(i.getSku())
                 .totalQuantity(i.getQuantity())
                 .reservedQuantity(i.getReservedQuantity())
                 .availableQuantity(i.getQuantity() - i.getReservedQuantity())
-                .safetyStockLevel(i.getSafetyStockLevel()) // Entity đã thêm nên hết lỗi
+                .safetyStockLevel(i.getSafetyStockLevel())
                 .build();
     }
 
-    // [FIX] Thêm hàm saveLog để các hàm trên gọi không bị lỗi
     private void saveLog(String pId, String oId, StockLog.LogType type, int amount, int currentStock, String note) {
         StockLog log = StockLog.builder()
                 .productId(pId)

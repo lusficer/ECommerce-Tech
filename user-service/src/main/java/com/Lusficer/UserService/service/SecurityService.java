@@ -1,8 +1,8 @@
 // user-service/src/main/java/com/Lusficer/UserService/service/SecurityService.java
 package com.Lusficer.UserService.service;
 
-import com.Lusficer.UserService.dto.SecurityUpdateRequest;
-import com.Lusficer.UserService.dto.SecurityUpdateResponse;
+import com.Lusficer.UserService.dto.request.SecurityUpdateRequest;
+import com.Lusficer.UserService.dto.response.SecurityUpdateResponse;
 import com.Lusficer.UserService.entity.UserAuth;
 import com.Lusficer.UserService.exception.BadRequestException;
 import com.Lusficer.UserService.exception.ResourceNotFoundException;

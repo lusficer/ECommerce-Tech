@@ -2,16 +2,19 @@
 package com.Lusficer.UserService.controller;
 
 import com.Lusficer.UserService.config.JwtTokenProvider;
-import com.Lusficer.UserService.dto.LoginRequest;
-import com.Lusficer.UserService.dto.LoginResponse;
-import com.Lusficer.UserService.dto.RegisterRequest;
 import com.Lusficer.UserService.entity.UserAuth;
-import com.Lusficer.UserService.dto.RegistrationResponse;
+import com.Lusficer.UserService.dto.request.LoginRequest;
+import com.Lusficer.UserService.dto.request.RegisterRequest;
+import com.Lusficer.UserService.dto.response.LoginResponse;
+import com.Lusficer.UserService.dto.response.RegistrationResponse;
 import com.Lusficer.UserService.entity.UserProfile;
 import com.Lusficer.UserService.entity.UserRole;
+import com.Lusficer.UserService.entity.UserStatus;
 import com.Lusficer.UserService.repository.UserAuthRepository;
 import com.Lusficer.UserService.repository.UserProfileRepository;
 import com.Lusficer.UserService.repository.UserRoleRepository;
+import com.Lusficer.UserService.repository.UserStatusRepository;
+
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -39,7 +42,8 @@ public class AuthController {
     private final UserAuthRepository authRepo;
     private final UserRoleRepository roleRepo;
     private final PasswordEncoder passwordEncoder;
-
+    private final UserStatusRepository statusRepo;
+       
         @PostMapping("/login")
         @Operation(summary = "Login", description = "Login → returns JWT")
         public ResponseEntity<LoginResponse> login(@Valid @RequestBody LoginRequest req) {
@@ -47,14 +51,15 @@ public class AuthController {
                 new UsernamePasswordAuthenticationToken(req.email(), req.password())
         );
         String jwt = jwtTokenProvider.generateToken(auth);
-        return ResponseEntity.ok(new LoginResponse(jwt));
+        UserProfile user = profileRepo.findByEmail(req.email())
+            .orElseThrow(() -> new RuntimeException("User not found"));
+        return ResponseEntity.ok(new LoginResponse(jwt, user.getUserId()));
         }
 
         @PostMapping("/register")
         @Operation(summary = "Register user", description = "Create a user account and assign a role (selectable via dropdown)")
         public ResponseEntity<RegistrationResponse> register(@Valid @RequestBody RegisterRequest request) {
-        // 1. Create UserProfile
-        // Determine a human-friendly userId label based on the requested role
+       
                 String userLabel;
                 switch (request.role().name()) {
                     case "ADMIN" -> userLabel = "ADMIN";
@@ -63,6 +68,7 @@ public class AuthController {
                     case "VENDOR" -> userLabel = "VEND";
                     case "GUEST" -> userLabel = "GUEST";
                     case "WAREHOUSE_MANAGER" -> userLabel = "WM";
+                    case "SHIPPER" -> userLabel = "SH"; 
                     default -> userLabel = "U";
                 }
 
@@ -81,7 +87,6 @@ public class AuthController {
                 .build();
         profileRepo.save(profile);
 
-        // 2. Create UserAuth
         UserAuth auth = UserAuth.builder()
                 .authId(UUID.randomUUID().toString())
                 .userId(profile.getUserId())
@@ -91,7 +96,6 @@ public class AuthController {
                 .build();
         authRepo.save(auth);
 
-        // 3. Assign role according to request (role is an enum shown as dropdown in Swagger)
                 String prefix;
                 switch (request.role().name()) {
                     case "ADMIN" -> prefix = "AD";
@@ -99,6 +103,7 @@ public class AuthController {
                     case "SHOP_MANAGER" -> prefix = "S";
                     case "VENDOR" -> prefix = "V";
                     case "GUEST" -> prefix = "G";
+                    case "SHIPPER" -> prefix = "SH";
                     default -> prefix = "U";
                 }
                 String roleId = String.format("%s-%03d", prefix, next);
@@ -111,8 +116,14 @@ public class AuthController {
                 .build();
         roleRepo.save(role);
 
-        // Return a JSON object with message and assigned userId so Swagger "Try it out"
-        // can parse the response as JSON instead of raw text.
+        UserStatus status = UserStatus.builder()
+                .userId(profile.getUserId()) 
+                .isOnline(true)             
+                .isVerified(false)           
+                .isBanned(false)            
+                .build();
+        statusRepo.save(status);
+
         RegistrationResponse resp = RegistrationResponse.builder()
                 .message("Registration successful")
                 .userId(profile.getUserId())

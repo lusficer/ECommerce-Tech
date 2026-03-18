@@ -28,7 +28,6 @@ public class ManagerProductController {
     @Autowired
     private ProductService productService;
 
-    // UC: Manage Product Approval Queue [cite: 16]
     @GetMapping("/queue")
     @PreAuthorize("hasAnyAuthority('ROLE_SHOP_MANAGER','ROLE_MANAGER')")
     @Operation(
@@ -43,12 +42,12 @@ public class ManagerProductController {
     )
     @ApiResponse(responseCode = "401", description = "Unauthorized - invalid or missing token")
     @ApiResponse(responseCode = "403", description = "Forbidden - insufficient permissions (MANAGER role required)")
-    public ResponseEntity<List<Product>> getApprovalQueue() {
-        return ResponseEntity.ok(productService.getApprovalQueue());
+    public ResponseEntity<List<Product>> getApprovalQueue(
+            @RequestHeader("SHOP-ID") String shopId) { 
+        return ResponseEntity.ok(productService.getApprovalQueue(shopId));
     }
 
-    // ManagerProductController.java
-    // UC: View Product Detail for Review 
+    
     @GetMapping("/{productId}")
     @PreAuthorize("hasAnyAuthority('ROLE_SHOP_MANAGER','ROLE_MANAGER')")
     @Operation(
@@ -63,7 +62,6 @@ public class ManagerProductController {
     }
 
 
-    // UC: Review Product Listing (Approve/Reject)  & Feedback 
     @PostMapping("/{productId}/review")
     @PreAuthorize("hasAnyAuthority('ROLE_SHOP_MANAGER','ROLE_MANAGER')")
     @Operation(
@@ -84,4 +82,33 @@ public class ManagerProductController {
         productService.reviewProduct(productId, reviewDTO);
         return ResponseEntity.ok("Product review submitted successfully");
     }
+
+    @GetMapping
+    @PreAuthorize("hasAnyAuthority('ROLE_SHOP_MANAGER','ROLE_MANAGER')")
+    public ResponseEntity<List<Product>> getShopProducts(@RequestHeader("SHOP-ID") String shopId) {
+        return ResponseEntity.ok(productService.getVendorProducts(shopId)); 
+    }
+
+    @DeleteMapping("/{productId}")
+    @PreAuthorize("hasAnyAuthority('ROLE_SHOP_MANAGER','ROLE_MANAGER')")
+    public ResponseEntity<Void> deleteProductManager(@PathVariable("productId") String productId) {
+        productService.deleteProduct(productId);
+        return ResponseEntity.ok().build();
+    }
+
+    @PutMapping("/{productId}/discount")
+    @PreAuthorize("hasAnyAuthority('ROLE_SHOP_MANAGER','ROLE_MANAGER')")
+    @Operation(
+        summary = "Update product discount",
+        description = "Allows a manager to directly update the discount percentage of a product. Requires SHOP-ID header for security."
+    )
+    public ResponseEntity<String> updateDiscount(
+        @PathVariable("productId") String productId,
+        @RequestHeader("SHOP-ID") String shopId,
+        @RequestParam("percentage") int percentage,
+        @RequestParam("managerId") String managerId){
+    
+    productService.updateProductDiscount(productId, shopId, percentage, managerId);
+    return ResponseEntity.ok("Discount updated successfully");
+}
 }

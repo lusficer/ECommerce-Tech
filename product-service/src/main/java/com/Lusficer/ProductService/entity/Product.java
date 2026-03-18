@@ -23,9 +23,24 @@ public class Product {
 
     private String description;
 
+    @Column(name = "brand")
+    private String brand;
+
+    @Lob
+    @Column(name = "specifications", columnDefinition = "LONGTEXT")
+    private String specifications;
+
     @Column(nullable = false)
     private BigDecimal price;
 
+    @Column(name = "discountPercentage")
+    private Integer discountPercentage = 0;
+
+    @Column(name = "soldCount") 
+    private Integer soldCount = 0;
+
+    @Lob
+    @Column(name = "imageUrl", columnDefinition = "LONGTEXT")
     private String imageUrl;
 
     @Enumerated(EnumType.STRING)
@@ -33,12 +48,21 @@ public class Product {
 
     private Boolean isDeleted = false; // Soft delete 
 
+    // Add these inside your Product.java class
+    @Column(name = "averageRating", columnDefinition = "DECIMAL(3,2) DEFAULT 0.00")
+    private Double averageRating = 0.0;
 
-    private LocalDateTime submittedAt; // Thời gian gửi duyệt [cite: 16]
+    @Column(name = "totalReviews", columnDefinition = "INT DEFAULT 0")
+    private Integer totalReviews = 0;
+
+    private LocalDateTime submittedAt; 
 
     @Column(updatable = false)
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
+
+    @Transient 
+    private Integer stockQuantity = 0;
 
     @PrePersist
     protected void onCreate() {

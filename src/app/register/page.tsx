@@ -4,11 +4,13 @@ import React, { useState } from 'react';
 import Link from 'next/link';
 import { EyeOff, Fingerprint, Loader2 } from 'lucide-react';
 import toast from 'react-hot-toast';
+
 const ROLES = [
   { value: 'CUSTOMER', label: 'Customer' },
   { value: 'VENDOR', label: 'Vendor' },
   { value: 'SHOP_MANAGER', label: 'Shop Manager' },
   { value: 'WAREHOUSE_MANAGER', label: 'Warehouse Manager' },
+  { value: 'SHIPPER', label: 'Shipper' }, 
   { value: 'ADMIN', label: 'Admin' },
   { value: 'GUEST', label: 'Guest' },
 ];
@@ -58,7 +60,7 @@ export default function RegisterPage() {
       });
 
       if (!response.ok) {
-        throw new Error('Đăng ký thất bại. Email có thể đã tồn tại.');
+        throw new Error('Registration failed. Please try again!');
       }
 
       const data = await response.json();
@@ -81,7 +83,6 @@ export default function RegisterPage() {
 
       <div className="bg-white rounded-[2rem] shadow-sm border border-slate-200 overflow-hidden flex flex-col md:flex-row max-w-5xl mx-auto min-h-[600px]">
         
-        {/* Left Side */}
         <div className="hidden md:flex w-1/2 bg-slate-50 p-12 flex-col items-center justify-center relative border-r border-slate-100">
            <div className="absolute inset-0 bg-gradient-to-tr from-cyan-50 to-slate-100 z-0"></div>
            <Fingerprint className="w-48 h-48 text-cyan-200 relative z-10 drop-shadow-md" strokeWidth={1} />
@@ -90,7 +91,6 @@ export default function RegisterPage() {
            </h3>
         </div>
 
-        {/* Right Side - Form */}
         <div className="w-full md:w-1/2 p-10 md:p-12 flex flex-col justify-center">
           <h1 className="text-3xl font-black text-cyan-600 mb-1">Register</h1>
           <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-6">Join to us</p>

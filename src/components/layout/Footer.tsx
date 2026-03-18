@@ -7,10 +7,8 @@ export default function Footer() {
     <footer className="w-full bg-slate-100 pt-16 pb-8 border-t border-slate-200 font-sans mt-20">
       <div className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8">
         
-        {/* Top Section: 4 Columns */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 gap-10 lg:gap-8 mb-16">
           
-          {/* Col 1: Newsletter & Socials (Takes up 4 columns) */}
           <div className="lg:col-span-4 pr-0 lg:pr-10">
             <p className="text-slate-600 font-medium mb-6 leading-relaxed">
               Be the first to get the latest news about tech trends, promotions and much more!
@@ -39,7 +37,6 @@ export default function Footer() {
             </div>
           </div>
 
-          {/* Col 2: Get In Touch (Takes up 3 columns) */}
           <div className="lg:col-span-3">
             <h3 className="text-base font-black text-slate-900 mb-6">Get In Touch</h3>
             <ul className="space-y-4 text-sm text-slate-600">
@@ -49,7 +46,6 @@ export default function Footer() {
             </ul>
           </div>
 
-          {/* Col 3: Help/Policies (Takes up 3 columns) */}
           <div className="lg:col-span-3">
             <ul className="space-y-4 text-sm text-slate-600">
               <li><Link href="#" className="hover:text-orange-500 transition-colors">FAQs</Link></li>
@@ -62,7 +58,6 @@ export default function Footer() {
             </ul>
           </div>
 
-          {/* Col 4: About (Takes up 2 columns) */}
           <div className="lg:col-span-2">
             <ul className="space-y-4 text-sm text-slate-600">
               <li><Link href="#" className="hover:text-orange-500 transition-colors">About Store</Link></li>
@@ -74,27 +69,22 @@ export default function Footer() {
 
         </div>
 
-        {/* Bottom Section: Payments, Logo, Language */}
         <div className="border-t border-slate-200 pt-8 flex flex-col md:flex-row items-center justify-between gap-6">
           
-          {/* Payments (Giả lập bằng icon thẻ tín dụng vì Lucide ko có logo Visa/Master) */}
           <div className="flex items-center gap-3">
             <span className="text-sm text-slate-500 mr-2">Accept for</span>
             <div className="flex gap-2 text-slate-700">
               <CreditCard className="w-8 h-8" />
-              {/* Thêm text giả logo thanh toán */}
               <span className="font-black italic text-blue-800 text-lg tracking-tighter">VISA</span>
               <span className="font-bold text-red-500 text-lg">Pay<span className="text-blue-500">Pal</span></span>
             </div>
           </div>
 
-          {/* Center Logo */}
           <div className="flex items-center gap-1.5 text-slate-900">
             <Apple className="w-6 h-6 text-slate-900" />
             <span className="text-xl font-black tracking-tight">Tech<span className="text-blue-600">Mall</span></span>
           </div>
 
-          {/* Language Selector */}
           <div className="flex items-center gap-2 text-sm text-slate-600 cursor-pointer hover:text-orange-500 transition-colors">
             <Globe className="w-4 h-4" />
             <span>Language: <span className="font-bold text-slate-900">English</span></span>
@@ -102,7 +92,6 @@ export default function Footer() {
 
         </div>
 
-        {/* Copyright */}
         <div className="mt-8 text-center text-xs text-slate-400">
           © {new Date().getFullYear()} TechStore. All Rights Reserved.
         </div>

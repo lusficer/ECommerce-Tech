@@ -1,9 +1,13 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { useParams } from 'next/navigation';
+import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
-import { Heart, Star, ShoppingCart, Truck, ShieldCheck, ChevronRight, Store, Share2, Loader2, Info, MessageSquare, Cpu, Package, CreditCard } from 'lucide-react';
+import { 
+  Heart, Star, ShoppingCart, Truck, ShieldCheck, 
+  ChevronRight, Store, Share2, Loader2, Info, 
+  MessageSquare, Cpu, Package, CreditCard, ThumbsUp, UserCircle2
+} from 'lucide-react';
 import toast from 'react-hot-toast';
 
 interface ProductInternalDto {
@@ -18,15 +22,21 @@ interface ProductInternalDto {
   brand?: string;
   specifications?: string;
   categoryId?: string; 
+  averageRating?: number;
+  totalReviews?: number;
 }
 
-const MOCK_REVIEWS = [
-  { id: 1, user: "Alex Johnson", rating: 5, date: "Nov 12, 2025", comment: "Absolutely love this! The build quality is premium, and it performs exactly as described. Delivery was also surprisingly fast." },
-  { id: 2, user: "Sarah M.", rating: 4, date: "Oct 28, 2025", comment: "Great value for the price. The features are solid and it looks really sleek. I knocked off one star just because the packaging was slightly dented upon arrival, but the product inside was perfectly safe." },
-  { id: 3, user: "Michael T.", rating: 5, date: "Oct 15, 2025", comment: "Highly recommend! I've been using it daily and it hasn't let me down. Best purchase I've made this month." }
-];
+interface ReviewResponseDTO {
+  reviewId: number;
+  userId: string;
+  userName: string;
+  rating: number;
+  comment: string;
+  createdAt: string;
+}
 
 export default function ProductDetailPage() {
+  const router = useRouter();
   const params = useParams();
   const productId = params.id as string;
 
@@ -39,6 +49,14 @@ export default function ProductDetailPage() {
 
   const [frequentlyBought, setFrequentlyBought] = useState<ProductInternalDto[]>([]);
   const [relatedProducts, setRelatedProducts] = useState<ProductInternalDto[]>([]);
+
+  const [reviews, setReviews] = useState<ReviewResponseDTO[]>([]);
+  const [reviewsLoading, setReviewsLoading] = useState(true);
+  
+  const [reviewerNames, setReviewerNames] = useState<Record<string, string>>({});
+
+  const [activeTab, setActiveTab] = useState<'description' | 'reviews'>('description');
+  const [reviewFilter, setReviewFilter] = useState<number | 'ALL' | 'HAS_COMMENT'>('ALL');
 
   useEffect(() => {
     if (!productId) { setLoading(false); return; }
@@ -66,16 +84,15 @@ export default function ProductDetailPage() {
           }
 
           if (token && productData.categoryId) {
-             fetch(`http://localhost:8090/api/recommendations/track`, { // Sửa thành cổng 8090
+             fetch(`http://localhost:8090/api/recommendations/track`, { 
                method: 'POST',
                headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-               // [MỚI] Truyền thêm categoryId vào Body
                body: JSON.stringify({ 
                  productId: cleanId, 
                  categoryId: productData.categoryId, 
                  actionType: 'VIEW' 
                })
-             }).catch((err) => console.error("Lỗi bắn log VIEW:", err));
+             }).catch((err) => console.error("Error sending VIEW log:", err));
           }
 
           if (productData.categoryId) {
@@ -111,6 +128,8 @@ export default function ProductDetailPage() {
            }
         }
 
+        fetchReviews(cleanId);
+
       } catch (error) {
         console.error('Network connection error:', error);
       } finally {
@@ -120,6 +139,62 @@ export default function ProductDetailPage() {
 
     fetchData();
   }, [productId]);
+
+  const fetchReviews = async (id: string) => {
+    const token = localStorage.getItem('accessToken') || localStorage.getItem('token');
+    const userId = localStorage.getItem('userId');
+    try {
+      setReviewsLoading(true);
+      const res = await fetch(`http://localhost:8083/api/products/${id}/reviews`, { 
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'userId': userId || '',
+          'Content-Type': 'application/json'
+        },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setReviews(data);
+
+        const uniqueUserIds = Array.from(new Set(data.map((r: any) => r.userId)));
+        const namesMap: Record<string, string> = {};
+        const token = localStorage.getItem('accessToken') || localStorage.getItem('token');
+        
+        await Promise.all(
+          uniqueUserIds.map(async (uid) => {
+            try {
+               const userRes = await fetch(`http://localhost:8081/api/account/status/${uid}`, {
+                 headers: {
+                   'Content-Type': 'application/json',
+                   ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+                 }
+               });
+               if (userRes.ok) {
+                 const userData = await userRes.json();
+                 namesMap[uid as string] = userData.profile.name;
+               }
+            } catch (e) {
+               console.error(`Error fetching profile for user ${uid}`, e);
+            }
+          })
+        );
+        setReviewerNames(namesMap);
+      }
+    } catch (err) {
+      console.error("Failed to fetch reviews", err);
+    } finally {
+      setReviewsLoading(false);
+    }
+  };
+
+  const filteredReviews = reviews.filter(review => {
+    if (reviewFilter === 'ALL') return true;
+    if (reviewFilter === 'HAS_COMMENT') return review.comment && review.comment.trim().length > 0;
+    return review.rating === reviewFilter; 
+  });
+  
+  const countStars = (star: number) => reviews.filter(r => r.rating === star).length;
+  const countComments = reviews.filter(r => r.comment && r.comment.trim().length > 0).length;
 
   const handleToggleWishlist = async () => {
     const token = localStorage.getItem('accessToken') || localStorage.getItem('token');
@@ -147,7 +222,7 @@ export default function ProductDetailPage() {
               categoryId: product.categoryId, 
               actionType: 'WISHLIST' 
             })
-          }).catch((err) => console.error("Lỗi bắn log WISHLIST:", err));
+          }).catch((err) => console.error("Error sending WISHLIST log:", err));
         }
       }
     } catch (err) { toast.error("Server connection error!"); }
@@ -159,18 +234,17 @@ export default function ProductDetailPage() {
     const cleanId = decodeURIComponent(productId);
 
     if (!token || !userId) {
-      toast.error("Vui lòng đăng nhập để thêm vào giỏ hàng!");
+      toast.error("Please log in to add to cart!");
       return;
     }
 
     try {
-      // 1. GỌI API THÊM VÀO GIỎ HÀNG (Cart Service)
       const res = await fetch(`http://localhost:8088/api/cart/add`, {
         method: 'POST',
         headers: { 
           'Authorization': `Bearer ${token}`, 
           'Content-Type': 'application/json',
-          'userId': userId // Bắt buộc phải có RequestHeader này theo code BE của bạn
+          'userId': userId
         },
         body: JSON.stringify({ 
           productId: cleanId,
@@ -180,17 +254,13 @@ export default function ProductDetailPage() {
 
       if (!res.ok) {
         const errorText = await res.text();
-        // Bắt lỗi hết hàng hoặc lỗi Inventory từ Backend
-        toast.error(errorText || "Lỗi khi thêm vào giỏ hàng!");
+        toast.error(errorText || "Error adding to cart!");
         return;
       }
 
-      toast.success("Đã thêm vào giỏ hàng!");
-      
-      // Bắn sự kiện để Header tự động cập nhật số đếm giỏ hàng
+      toast.success("Added to cart!");
       window.dispatchEvent(new Event('cartUpdated'));
 
-      // 2. [AI LOG] TRACK ADD TO CART
       if (product?.categoryId) {
          fetch(`http://localhost:8090/api/recommendations/track`, {
            method: 'POST',
@@ -203,13 +273,65 @@ export default function ProductDetailPage() {
          }).catch(() => {});
       }
     } catch (err) {
-      toast.error("Không thể kết nối đến máy chủ giỏ hàng.");
+      toast.error("Cannot connect to the cart server.");
     }
   }
 
-  const handleBuyNow = () => {
-    toast.success("Proceeding to checkout...");
-  }
+  const handleBuyNow = async () => {
+    if(!product) return;
+
+    const token = localStorage.getItem('accessToken') || localStorage.getItem('token');
+    const userId = localStorage.getItem('userId');
+    const cleanId = decodeURIComponent(productId);
+
+    if (!token || !userId) {
+      toast.error("Please log in to proceed to checkout!");
+      router.push('/login');
+      return;
+    }
+
+    try {
+      const res = await fetch(`http://localhost:8088/api/cart/add`, {
+        method: 'POST',
+        headers: { 
+          'Authorization': `Bearer ${token}`, 
+          'Content-Type': 'application/json',
+          'userId': userId
+        },
+        body: JSON.stringify({ 
+          productId: cleanId,
+          quantity: currentQty
+        })
+      });
+
+      if (!res.ok) {
+        const errorText = await res.text();
+        toast.error(errorText || "Error processing your request!");
+        return;
+      }
+
+      const hasDiscount = product.discountPercentage > 0;
+      const salePrice = hasDiscount ? product.price * (1 - product.discountPercentage / 100) : product.price;
+      
+      const checkoutItem = {
+        productId: cleanId,
+        productName: product.name,
+        productImage: product.mainImage,
+        price: salePrice,
+        quantity: currentQty,
+        shopId: product.shopId,
+        totalPrice: salePrice * currentQty
+      };
+      
+      localStorage.setItem('selectedCheckoutItems', JSON.stringify([checkoutItem]));
+      window.dispatchEvent(new Event('cartUpdated'));
+      toast.success("Proceeding to checkout...");
+      router.push('/checkout');
+
+    } catch (err) {
+      toast.error("Cannot connect to server.");
+    }
+  };
 
   const currentQty = Number(quantity) || 1; 
   const handleQuantityChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -230,23 +352,27 @@ export default function ProductDetailPage() {
   const stockCount = product.stock ?? 0;
   const isOutOfStock = stockCount <= 0;
 
+  const renderSpecValue = (val: any) => {
+    if (Array.isArray(val)) {
+      return (
+        <ul className="list-disc pl-5 space-y-1.5">
+          {val.map((item, i) => <li key={i} className="text-slate-700">{String(item)}</li>)}
+        </ul>
+      );
+    } else if (typeof val === 'object' && val !== null) {
+      return <pre className="whitespace-pre-wrap font-sans text-slate-700">{JSON.stringify(val, null, 2)}</pre>;
+    }
+    return <span className="text-slate-700">{String(val)}</span>;
+  };
+
  return (
-    // [NEW] ADD BACKGROUND IMAGE TO WHOLE PAGE (Subtle for less distraction)
     <div className="relative min-h-screen py-8 font-sans overflow-x-hidden bg-slate-50">
-      <div 
-        className="absolute inset-0 z-0 pointer-events-none opacity-[0.03]" 
-        style={{ backgroundImage: 'url("https://www.transparenttextures.com/patterns/cubes.png")' }}
-      ></div>
+      <div className="absolute inset-0 z-0 pointer-events-none opacity-[0.03]" style={{ backgroundImage: 'url("https://www.transparenttextures.com/patterns/cubes.png")' }}></div>
 
       <div className="relative z-10 max-w-[1600px] mx-auto px-4 sm:px-6 flex gap-8 justify-center">
         
-        {/* LEFT BANNER (MEGA SALE) -> BECOMES CLICKABLE LINK */}
         <div className="hidden xl:block w-[240px] shrink-0">
-          <Link 
-            href="/flash-sale" 
-            className="block sticky top-28 h-[600px] rounded-3xl overflow-hidden shadow-sm border border-slate-200 group cursor-pointer"
-          >
-            {/* Cool Gaming/Tech setup image */}
+          <Link href="/flash-sale" className="block sticky top-28 h-[600px] rounded-3xl overflow-hidden shadow-sm border border-slate-200 group cursor-pointer">
             <img src="https://images.unsplash.com/photo-1542751371-adc38448a05e?q=80&w=600&auto=format&fit=crop" alt="Flash Sale" className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" />
             <div className="absolute inset-0 bg-gradient-to-t from-slate-900 via-slate-900/60 to-transparent p-6 flex flex-col justify-end">
               <span className="text-orange-500 font-black text-4xl mb-1 tracking-tight">MEGA<br/>SALE</span>
@@ -258,10 +384,8 @@ export default function ProductDetailPage() {
           </Link>
         </div>
 
-        {/* MAIN CONTENT COLUMN */}
         <div className="w-full max-w-[1200px] flex-1">
           
-          {/* Breadcrumb */}
           <div className="flex items-center text-sm font-bold text-slate-400 mb-8 uppercase tracking-wide">
             <Link href="/" className="hover:text-cyan-600 transition-colors">Home</Link> 
             <ChevronRight className="w-4 h-4 mx-2" /> 
@@ -317,7 +441,9 @@ export default function ProductDetailPage() {
                 <div className="flex items-center text-yellow-400">
                   <Star className="w-5 h-5 fill-current" /><Star className="w-5 h-5 fill-current" /><Star className="w-5 h-5 fill-current" /><Star className="w-5 h-5 fill-current" /><Star className="w-5 h-5 fill-current text-slate-200" />
                 </div>
-                <span className="text-sm font-bold text-slate-600 underline cursor-pointer hover:text-cyan-600">4.0 (128 reviews)</span>
+                <span className="text-sm font-bold text-slate-600 underline cursor-pointer hover:text-cyan-600" onClick={() => setActiveTab('reviews')}>
+                  {product.averageRating?.toFixed(1) || "0.0"} ({product.totalReviews || 0} reviews)
+                </span>
                 <span className="w-1.5 h-1.5 rounded-full bg-slate-300"></span>
                 <span className={`text-sm font-bold ${isOutOfStock ? 'text-red-500' : 'text-green-600'}`}>{isOutOfStock ? 'Out of Stock' : `${stockCount} In Stock`}</span>
               </div>
@@ -408,69 +534,154 @@ export default function ProductDetailPage() {
             </div>
           )}
 
-          <div className="mt-8 grid grid-cols-1 lg:grid-cols-3 gap-8">
-            <div className="lg:col-span-2 bg-white rounded-3xl shadow-sm border border-slate-200 p-8 md:p-10 flex flex-col gap-10">
-              <div>
+          <div className="mt-8 bg-white rounded-3xl border border-slate-100 shadow-sm p-2 mb-8 flex flex-col md:flex-row gap-2 sticky top-24 z-40">
+            <button 
+              onClick={() => setActiveTab('description')}
+              className={`flex-1 py-3.5 px-6 rounded-2xl font-black text-sm transition-all flex items-center justify-center gap-2 ${activeTab === 'description' ? 'bg-slate-900 text-white shadow-md' : 'text-slate-500 hover:bg-slate-50'}`}
+            >
+              <Info className="w-4 h-4" /> Product Details
+            </button>
+            <button 
+              onClick={() => setActiveTab('reviews')}
+              className={`flex-1 py-3.5 px-6 rounded-2xl font-black text-sm transition-all flex items-center justify-center gap-2 ${activeTab === 'reviews' ? 'bg-cyan-600 text-white shadow-md' : 'text-slate-500 hover:bg-slate-50'}`}
+            >
+              <MessageSquare className="w-4 h-4" /> 
+              Customer Reviews ({product.totalReviews || 0})
+            </button>
+          </div>
+
+          <div className="bg-white rounded-3xl p-6 lg:p-10 border border-slate-100 shadow-sm min-h-[400px]">
+            
+            {activeTab === 'description' && (
+              <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 max-w-4xl">
                 <h2 className="text-2xl font-black text-slate-900 mb-6 flex items-center gap-2">
                   <Info className="w-6 h-6 text-cyan-600" /> Product Overview
                 </h2>
-                <div className="prose prose-slate max-w-none text-slate-600 leading-relaxed font-medium">
-                  {product.description ? <p>{product.description}</p> : <p className="italic text-slate-400">No detailed description is available.</p>}
+                <div className="prose prose-slate max-w-none text-slate-600 leading-relaxed font-medium whitespace-pre-wrap break-words mb-10">
+                  {product.description ? product.description : <span className="italic text-slate-400">No detailed description is available.</span>}
                 </div>
-              </div>
-
-              {product.specifications && (
-                <div>
-                  <h2 className="text-2xl font-black text-slate-900 mb-6 flex items-center gap-2">
-                    <Cpu className="w-6 h-6 text-cyan-600" /> Technical Specifications
-                  </h2>
-                  <div className="overflow-hidden border border-slate-200 rounded-xl">
-                    <table className="w-full text-sm text-left text-slate-600">
-                      <tbody>
-                        {(() => {
-                          try {
-                            const specs = JSON.parse(product.specifications);
-                            return Object.entries(specs).map(([key, value], idx) => (
-                              <tr key={idx} className="border-b border-slate-200 last:border-0 hover:bg-slate-50 transition-colors">
-                                <th className="py-4 px-6 font-bold text-slate-900 w-1/3 bg-slate-50/50 border-r border-slate-200">{key}</th>
-                                <td className="py-4 px-6 font-medium">{value as React.ReactNode}</td>
-                              </tr>
-                            ));
-                          } catch (e) {
-                            return <tr><td className="py-4 px-6 font-medium">{product.specifications}</td></tr>;
-                          }
-                        })()}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            <div className="lg:col-span-1 bg-white rounded-3xl shadow-sm border border-slate-200 p-8 md:p-10">
-              <div className="flex items-center justify-between mb-6">
-                <h2 className="text-xl font-black text-slate-900 flex items-center gap-2"><MessageSquare className="w-5 h-5 text-cyan-600" /> Reviews</h2>
-                <span className="text-sm font-bold text-cyan-600 bg-cyan-50 px-3 py-1 rounded-full">4.0 / 5</span>
-              </div>
-              
-              <div className="flex flex-col gap-6 max-h-[600px] overflow-y-auto pr-2 scrollbar-thin">
-                {MOCK_REVIEWS.map((review) => (
-                  <div key={review.id} className="border-b border-slate-100 last:border-0 pb-6 last:pb-0">
-                    <div className="flex justify-between items-start mb-2">
-                      <div>
-                        <span className="font-bold text-slate-900 block text-sm">{review.user}</span>
-                        <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">{review.date}</span>
-                      </div>
-                      <div className="flex text-yellow-400">
-                        {[...Array(5)].map((_, i) => <Star key={i} className={`w-3.5 h-3.5 ${i < review.rating ? 'fill-current' : 'text-slate-200 fill-current'}`} />)}
-                      </div>
+                
+                {product.specifications && (
+                  <>
+                    <h2 className="text-xl font-black text-slate-900 mb-6 border-t border-slate-100 pt-8 flex items-center gap-2">
+                      <Cpu className="w-6 h-6 text-cyan-600" /> Technical Specifications
+                    </h2>
+                    <div className="overflow-hidden border border-slate-200 rounded-xl">
+                      <table className="w-full text-sm text-left text-slate-600">
+                        <tbody>
+                          {(() => {
+                            try {
+                              const specs = JSON.parse(product.specifications);
+                              return Object.entries(specs).map(([key, value], idx) => (
+                                <tr key={idx} className="border-b border-slate-200 last:border-0 hover:bg-slate-50 transition-colors">
+                                  <th className="py-4 px-6 font-bold text-slate-900 w-1/3 bg-slate-50/50 border-r border-slate-200 align-top capitalize">
+                                    {key.replace(/_/g, ' ')}
+                                  </th>
+                                  <td className="py-4 px-6 font-medium align-top break-words">
+                                    {renderSpecValue(value)}
+                                  </td>
+                                </tr>
+                              ));
+                            } catch (e) {
+                              return (
+                                <tr>
+                                  <td className="py-4 px-6 font-medium whitespace-pre-wrap leading-relaxed break-words">
+                                    {product.specifications}
+                                  </td>
+                                </tr>
+                              );
+                            }
+                          })()}
+                        </tbody>
+                      </table>
                     </div>
-                    <p className="text-sm text-slate-600 font-medium leading-relaxed">"{review.comment}"</p>
-                  </div>
-                ))}
+                  </>
+                )}
               </div>
-              <button className="w-full mt-6 py-3 border-2 border-slate-100 text-slate-600 font-bold rounded-xl hover:border-cyan-600 hover:text-cyan-600 transition-colors">Write a Review</button>
-            </div>
+            )}
+
+            {activeTab === 'reviews' && (
+              <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+                <div className="flex flex-col lg:flex-row gap-8 mb-10">
+                  <div className="lg:w-1/3 shrink-0 bg-slate-50 rounded-3xl border border-slate-100 p-8 flex flex-col items-center justify-center text-center">
+                    <div className="text-6xl font-black text-cyan-600 tracking-tighter mb-2">
+                      {product.averageRating?.toFixed(1) || "0.0"}
+                      <span className="text-2xl text-slate-400 font-bold tracking-normal">/5</span>
+                    </div>
+                    <div className="flex items-center text-yellow-400 gap-1 mb-3">
+                      {[...Array(5)].map((_, i) => (
+                        <Star key={i} className={`w-6 h-6 ${i < Math.round(product.averageRating || 0) ? 'fill-current' : 'fill-slate-200 text-slate-200'}`} />
+                      ))}
+                    </div>
+                    <p className="text-sm font-bold text-slate-500">Based on {product.totalReviews || 0} reviews</p>
+                  </div>
+
+                  <div className="lg:w-2/3 flex flex-wrap content-start gap-3">
+                    <button 
+                      onClick={() => setReviewFilter('ALL')}
+                      className={`px-5 py-2.5 text-sm font-bold rounded-xl border transition-all ${reviewFilter === 'ALL' ? 'bg-cyan-50 border-cyan-500 text-cyan-700' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'}`}
+                    >
+                      All ({product.totalReviews || 0})
+                    </button>
+                    {[5, 4, 3, 2, 1].map(star => (
+                      <button 
+                        key={star}
+                        onClick={() => setReviewFilter(star)}
+                        className={`px-5 py-2.5 text-sm font-bold rounded-xl border transition-all flex items-center gap-1 ${reviewFilter === star ? 'bg-cyan-50 border-cyan-500 text-cyan-700' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'}`}
+                      >
+                        {star} Star ({countStars(star)})
+                      </button>
+                    ))}
+                    <button 
+                      onClick={() => setReviewFilter('HAS_COMMENT')}
+                      className={`px-5 py-2.5 text-sm font-bold rounded-xl border transition-all ${reviewFilter === 'HAS_COMMENT' ? 'bg-cyan-50 border-cyan-500 text-cyan-700' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'}`}
+                    >
+                      With Comments ({countComments})
+                    </button>
+                  </div>
+                </div>
+
+                {reviewsLoading ? (
+                  <div className="py-12 flex justify-center"><Loader2 className="w-8 h-8 animate-spin text-cyan-600" /></div>
+                ) : filteredReviews.length === 0 ? (
+                  <div className="py-16 text-center flex flex-col items-center justify-center bg-slate-50 rounded-3xl border border-slate-100">
+                    <MessageSquare className="w-12 h-12 text-slate-300 mb-3" />
+                    <h3 className="text-lg font-black text-slate-800">No Reviews Found</h3>
+                    <p className="text-sm text-slate-500">There are no reviews matching your selected filter.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-6">
+                    {filteredReviews.map((review) => (
+                      <div key={review.reviewId} className="flex gap-4 p-6 bg-white border border-slate-100 rounded-3xl hover:shadow-md transition-shadow">
+                        <div className="w-12 h-12 shrink-0 bg-slate-100 rounded-full flex items-center justify-center text-slate-400">
+                          <UserCircle2 className="w-8 h-8" />
+                        </div>
+                        <div className="flex-1">
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="font-bold text-slate-900">{reviewerNames[review.userId] || review.userName}</span>
+                            <span className="text-xs font-medium text-slate-400">
+                              {new Date(review.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+                            </span>
+                          </div>
+                          <div className="flex text-yellow-400 mb-3">
+                            {[...Array(5)].map((_, i) => (
+                              <Star key={i} className={`w-3.5 h-3.5 ${i < review.rating ? 'fill-current' : 'fill-slate-200 text-slate-200'}`} />
+                            ))}
+                          </div>
+                          <p className="text-slate-700 text-sm leading-relaxed whitespace-pre-line">{review.comment}</p>
+                          
+                          <div className="mt-4 flex items-center gap-4 text-xs font-bold text-slate-400">
+                            <button className="flex items-center gap-1.5 hover:text-cyan-600 transition-colors">
+                              <ThumbsUp className="w-4 h-4" /> Helpful
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {relatedProducts.length > 0 && (
@@ -501,13 +712,8 @@ export default function ProductDetailPage() {
 
         </div>
 
-        {/* RIGHT BANNER (NEW ARRIVAL) -> BECOMES CLICKABLE LINK */}
        <div className="hidden xl:block w-[240px] shrink-0">
-          <Link 
-            href="/new-releases" 
-            className="block sticky top-28 h-[600px] rounded-3xl overflow-hidden shadow-sm border border-slate-200 group cursor-pointer"
-          >
-            {/* Modern smart device image */}
+          <Link href="/new-releases" className="block sticky top-28 h-[600px] rounded-3xl overflow-hidden shadow-sm border border-slate-200 group cursor-pointer">
             <img src="https://images.unsplash.com/photo-1523206489230-c012c64b2b48?q=80&w=600&auto=format&fit=crop" alt="New Releases" className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" />
             <div className="absolute inset-0 bg-gradient-to-t from-slate-900 via-slate-900/60 to-transparent p-6 flex flex-col justify-end">
               <span className="text-cyan-500 font-black text-4xl mb-1 tracking-tight">NEW<br/>ARRIVALS</span>

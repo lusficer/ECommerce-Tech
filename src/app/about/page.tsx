@@ -6,7 +6,6 @@ import Link from 'next/link';
 export default function AboutPage() {
   return (
     <div className="min-h-screen bg-slate-50 font-sans pb-20">
-      {/* Hero Section */}
       <div className="bg-slate-900 text-white py-24 text-center px-4 relative overflow-hidden">
         <div className="absolute top-0 left-0 w-full h-full opacity-10 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-cyan-400 via-slate-900 to-slate-900"></div>
         <div className="relative z-10 max-w-3xl mx-auto">
@@ -22,7 +21,6 @@ export default function AboutPage() {
         </div>
       </div>
 
-      {/* Core Values */}
       <div className="max-w-[1200px] mx-auto px-4 sm:px-6 py-20">
         <div className="text-center mb-12">
           <h2 className="text-3xl font-black text-slate-900">Why Choose TechStone?</h2>
@@ -45,7 +43,6 @@ export default function AboutPage() {
         </div>
       </div>
 
-      {/* CTA */}
       <div className="max-w-[1200px] mx-auto px-4 sm:px-6 text-center">
         <div className="bg-cyan-600 rounded-3xl p-12 text-white shadow-xl shadow-cyan-600/20">
            <h2 className="text-3xl font-black mb-4">Ready to upgrade your gear?</h2>

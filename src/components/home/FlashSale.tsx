@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { Zap, Heart, Star, CheckCircle2, XCircle, ShoppingCart, ArrowRight, Flame, Sparkles } from 'lucide-react';
+import { Zap, Heart, CheckCircle2, ShoppingCart, ArrowRight, Flame, Sparkles } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 interface FlashProduct {
@@ -39,7 +39,6 @@ export default function FlashSale() {
     }
   };
 
-  // Fetch product data
   useEffect(() => {
     const fetchTabProducts = async () => {
       setLoading(true);
@@ -85,7 +84,6 @@ export default function FlashSale() {
     }
 
     try {
-      // 1. Gọi API Cart Service
       const res = await fetch(`http://localhost:8088/api/cart/add`, {
         method: 'POST',
         headers: { 
@@ -93,10 +91,7 @@ export default function FlashSale() {
           'Content-Type': 'application/json',
           'userId': userId
         },
-        body: JSON.stringify({ 
-          productId: productId,
-          quantity: 1 // Click ở trang chủ thì mặc định thêm 1 cái
-        })
+        body: JSON.stringify({ productId: productId, quantity: 1 })
       });
 
       if (!res.ok) {
@@ -106,17 +101,12 @@ export default function FlashSale() {
       }
 
       toast.success("Đã thêm vào giỏ hàng!");
-      // 2. Kích hoạt sự kiện để Header tự nảy số
       window.dispatchEvent(new Event('cartUpdated'));
 
-      // 3. [AI LOG] TRACK ADD TO CART
       fetch(`http://localhost:8090/api/recommendations/track`, {
          method: 'POST',
          headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-         body: JSON.stringify({ 
-           productId: productId, 
-           actionType: 'ADD_TO_CART' 
-         })
+         body: JSON.stringify({ productId: productId, actionType: 'ADD_TO_CART' })
       }).catch(() => {});
 
     } catch (err) {
@@ -145,7 +135,6 @@ export default function FlashSale() {
           else newSet.delete(productId);
           return newSet;
         });
-
         window.dispatchEvent(new Event('wishlistUpdated'));
       }
     } catch (err) { toast.error("Server connection error."); }
@@ -164,12 +153,10 @@ export default function FlashSale() {
       <div className="w-full md:w-[320px] bg-slate-900 p-8 flex flex-col items-center justify-center relative overflow-hidden shrink-0">
         <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent z-0"></div>
         <div className="relative z-10 w-full text-center">
-           
            <div className="flex items-center justify-center gap-2 mb-8 animate-pulse">
               {activeTab === 'sale' && <Zap className="text-orange-500 w-10 h-10 fill-orange-500" />}
               {activeTab === 'new' && <Sparkles className="text-blue-500 w-10 h-10 fill-blue-500" />}
               {activeTab === 'best' && <Flame className="text-red-500 w-10 h-10 fill-red-500" />}
-              
               <h2 className="text-3xl font-black text-white uppercase tracking-tight">
                 {activeTab === 'sale' ? 'Flash Sale' : activeTab === 'new' ? 'New Arrivals' : 'Trending'}
               </h2>
@@ -187,7 +174,6 @@ export default function FlashSale() {
              </button>
            </div>
         </div>
-        
         <div className={`absolute -bottom-10 right-0 w-48 h-48 rounded-full blur-3xl z-0 pointer-events-none transition-colors duration-700 ${activeTab === 'sale' ? 'bg-orange-500/20' : activeTab === 'new' ? 'bg-blue-500/20' : 'bg-red-500/20'}`}></div>
       </div>
 
@@ -201,10 +187,8 @@ export default function FlashSale() {
           <>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
               {products.map((product) => {
-                const isOutOfStock = (product.stock ?? 0) <= 0;
                 const salePrice = product.price * (1 - (product.discountPercentage || 0) / 100);
                 const imageUrl = product.mainImage ? product.mainImage.split('|')[0] : "https://placehold.co/400x400?text=No+Image";
-
                 const isWishlisted = wishlistedIds.has(product.productId);
 
                 return (
@@ -225,7 +209,6 @@ export default function FlashSale() {
                       >
                         <Heart className={`w-4 h-4 ${isWishlisted ? 'fill-current' : ''}`} />
                       </button>
-
                     </div>
 
                     <div className="w-full aspect-square bg-slate-50 rounded-xl mb-4 flex items-center justify-center group-hover:bg-slate-100 transition-colors border border-slate-50 overflow-hidden">
@@ -243,14 +226,13 @@ export default function FlashSale() {
 
                     <div className="flex items-center justify-between mt-2 pt-4 border-t border-slate-50">
                       <div className="flex items-center gap-1.5">
-                        {isOutOfStock ? (
-                          <><XCircle className="w-4 h-4 text-red-500" /><span className="text-[11px] font-bold text-slate-500">Sold out</span></>
-                        ) : (
-                          <><CheckCircle2 className="w-4 h-4 text-green-500" /><span className="text-[11px] font-bold text-slate-500">{product.stock} Left</span></>
-                        )}
+                        {/* Mặc định hiển thị Available để UI đẹp mắt */}
+                        <CheckCircle2 className="w-4 h-4 text-green-500" />
+                        <span className="text-[11px] font-bold text-slate-500">Available</span>
                       </div>
                       
-                      <button disabled={isOutOfStock} onClick={(e) => handleAddToCart(e, product.productId)} className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${isOutOfStock ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-slate-900 text-white hover:bg-cyan-600 hover:scale-110 shadow-md'}`}>
+                      {/* Bỏ thuộc tính disabled, cho phép click thoải mái */}
+                      <button onClick={(e) => handleAddToCart(e, product.productId)} className="w-8 h-8 rounded-full flex items-center justify-center transition-all bg-slate-900 text-white hover:bg-cyan-600 hover:scale-110 shadow-md">
                         <ShoppingCart className="w-4 h-4" />
                       </button>
                     </div>

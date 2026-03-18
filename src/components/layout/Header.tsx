@@ -10,7 +10,6 @@ import {
   ChevronRight, Tablet, Monitor, Gamepad, Mouse, Package
 } from 'lucide-react';
 
-// --- TỪ ĐIỂN MARKETING CHO DANH MỤC ---
 const CATEGORY_META: Record<string, { icon: any, brands: string[], priceRanges: any[] }> = {
   'CAT_PHONE': {
     icon: Smartphone,
@@ -73,10 +72,15 @@ export default function Header() {
   const [activeCategoryId, setActiveCategoryId] = useState<string>(''); 
   const catMenuRef = useRef<HTMLDivElement>(null);
 
+  const [shops, setShops] = useState<any[]>([]);
+  const [loadingShops, setLoadingShops] = useState(false);
+  const [showShopDropdown, setShowShopDropdown] = useState(false);
+
   const [wishlistCount, setWishlistCount] = useState(0);
   const [wishlistPreview, setWishlistPreview] = useState<any[]>([]);
   const [cartCount, setCartCount] = useState(0);
   const [cartItems, setCartItems] = useState<any[]>([]); 
+
   useEffect(() => {
     const fetchWishlistHeader = async () => {
       const token = localStorage.getItem('accessToken') || localStorage.getItem('token');
@@ -94,11 +98,9 @@ export default function Header() {
           const data = await res.json();
           setWishlistCount(data.length);
 
-          // Chỉ lấy tối đa 3 sản phẩm mới nhất để show trên dropdown Header
           const topItems = data.slice(0, 3);
           if (topItems.length > 0) {
             const ids = topItems.map((item: any) => item.productId).join(',');
-            // Gọi API Batch để lấy nhanh Hình, Tên, Giá (Cổng 8083)
             const prodRes = await fetch(`http://localhost:8083/api/internal/products/batch?ids=${ids}`);
             if (prodRes.ok) {
               const prodData = await prodRes.json();
@@ -109,15 +111,37 @@ export default function Header() {
           }
         }
       } catch (err) {
-        console.error("Lỗi lấy preview wishlist header:", err);
+        console.error("Error fetching wishlist preview:", err);
       }
     };
 
-    fetchWishlistHeader(); // Chạy lần đầu khi load web
+    fetchWishlistHeader(); 
 
-    // Lắng nghe sự kiện từ trang ProductDetail
     window.addEventListener('wishlistUpdated', fetchWishlistHeader);
     return () => window.removeEventListener('wishlistUpdated', fetchWishlistHeader);
+  }, []);
+
+  useEffect(() => {
+    const token = localStorage.getItem('accessToken') || localStorage.getItem('token');
+
+    const fetchShops = async () => {
+      setLoadingShops(true);
+      try {
+        const response = await fetch('http://localhost:8082/api/shops', {
+        method: 'GET',
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }
+      }); 
+        if (response.ok) {
+          const data = await response.json();
+          setShops(data.slice(0, 8));
+        }
+      } catch (error) {
+        console.error("Error fetching shops:", error);
+      } finally {
+        setLoadingShops(false);
+      }
+    };
+    fetchShops();
   }, []);
 
   useEffect(() => {
@@ -148,7 +172,7 @@ export default function Header() {
           if (mergedData.length > 0) setActiveCategoryId(mergedData[0].id);
         }
       } catch (error) {
-        console.error("Lỗi load categories header:", error);
+        console.error("Error loading categories:", error);
       }
     };
     fetchCategories();
@@ -230,14 +254,12 @@ export default function Header() {
           setCartItems(data.items || []); 
         }
       } catch (err) {
-        console.error("Lỗi lấy giỏ hàng header", err);
+        console.error("Error fetching cart header:", err);
       }
     };
 
-    // Khởi chạy lần đầu tiên
     fetchCartHeader();
 
-    // Lắng nghe sự kiện để tự động cập nhật
     window.addEventListener('cartUpdated', fetchCartHeader);
     return () => window.removeEventListener('cartUpdated', fetchCartHeader);
   }, []);
@@ -259,7 +281,7 @@ export default function Header() {
              actionType: 'SEARCH',
              searchKeyword: keyword 
            })
-         }).catch(err => console.error("Lỗi gửi log SEARCH:", err));
+         }).catch(err => console.error("Error sending search log:", err));
        }
     }
   }
@@ -269,11 +291,10 @@ export default function Header() {
 
   return (
     <header className="w-full bg-white border-b border-slate-200 font-sans sticky top-0 z-50 shadow-sm">
-      {/* Tier 1: Top Bar */}
       <div className="hidden md:flex justify-between items-center px-4 lg:px-8 bg-slate-50 border-b border-slate-200 text-sm font-medium text-slate-600">
         <div className="flex items-center divide-x divide-slate-300 border-l border-slate-300">
           <Link href="/seller" className="px-5 py-2 hover:text-cyan-600 hover:bg-slate-200/50 transition-all">Seller Centre</Link>
-          <Link href="#" className="px-5 py-2 hover:text-cyan-600 hover:bg-slate-200/50 transition-all border-r">Order Tracking</Link>
+          <Link href="/orders" className="px-5 py-2 hover:text-cyan-600 hover:bg-slate-200/50 transition-all border-r border-slate-300">Order Tracking</Link>       
         </div>
         <div className="flex items-center border-l border-r border-slate-300">
           <button className="flex items-center gap-1.5 px-5 py-2 hover:text-cyan-600 hover:bg-slate-200/50 transition-all">
@@ -282,7 +303,6 @@ export default function Header() {
         </div>
       </div>
 
-      {/* Tier 2: Main Header */}
       <div className="px-4 lg:px-8 py-4 flex items-center justify-between gap-4 md:gap-8 border-b border-slate-100">
         <Link href="/" className="flex items-center shrink-0 group">
           <div className="flex items-center font-rubik tracking-tighter">
@@ -291,7 +311,6 @@ export default function Header() {
           </div>
         </Link>
 
-        {/* SEARCH BAR */}
         <form ref={searchRef} onSubmit={handleSearchSubmit} className="hidden md:flex flex-1 max-w-3xl relative mx-8">
           <input 
             type="text" value={searchInput} onChange={(e) => setSearchInput(e.target.value)} onFocus={() => { if (searchResults.length > 0) setShowDropdown(true); }}
@@ -301,7 +320,6 @@ export default function Header() {
           {isSearching && <Loader2 className="absolute right-12 top-1/2 -translate-y-1/2 w-4 h-4 animate-spin text-cyan-600" />}
           <button type="submit" className="absolute right-2 top-1/2 -translate-y-1/2 p-2 bg-cyan-600 rounded-full text-white hover:bg-cyan-700 transition-colors shadow-sm"><Search className="w-4 h-4" /></button>
 
-          {/* SEARCH DROPDOWN */}
           {showDropdown && (
             <div className="absolute top-full left-0 right-0 bg-white border border-t-0 border-cyan-500 rounded-b-2xl shadow-xl overflow-hidden z-50">
               {searchResults.length === 0 && !isSearching ? (
@@ -328,22 +346,16 @@ export default function Header() {
           )}
         </form>
           
-        {/* ACCOUNT, WISHLIST & CART */}
         <div className="flex items-center gap-5 shrink-0">
           
-          {/* Nút So sánh (Compare - Ẩn trên mobile cho gọn) */}
           <button className="text-slate-600 hover:text-cyan-600 transition-colors hidden sm:block" title="Compare Products">
             <RefreshCcw className="w-6 h-6" />
           </button>
 
-          {/* ========================================== */}
-          {/* Nút Yêu thích (Wishlist) kèm Dropdown Hover  */}
-          {/* ========================================== */}
           <div className="relative group">
             <div className="relative group">
             <Link href="/wishlist" className="flex text-slate-600 hover:text-cyan-600 transition-colors relative py-2" title="My Wishlist">
               <Heart className="w-6 h-6" />
-              {/* CHỈ HIỆN SỐ KHI > 0 */}
               {wishlistCount > 0 && (
                 <span className="absolute top-0 -right-1.5 w-4 h-4 bg-red-500 text-[10px] font-bold text-white flex items-center justify-center rounded-full border-2 border-white shadow-sm">
                   {wishlistCount}
@@ -351,7 +363,6 @@ export default function Header() {
               )}
             </Link>
 
-            {/* Dropdown Menu Yêu thích */}
             <div className="absolute top-full right-0 w-80 bg-white border border-slate-200 shadow-2xl rounded-2xl overflow-hidden opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-300 z-50 transform origin-top-right scale-95 group-hover:scale-100">
               <div className="p-4 border-b border-slate-100 bg-slate-50 flex justify-between items-center">
                 <h4 className="font-bold text-slate-900 text-sm">Recently Saved</h4>
@@ -389,12 +400,9 @@ export default function Header() {
             </div>
             </div>
           </div>
-          {/* ========================================== */}
 
-          {/* Đường gạch dọc phân cách */}
           <div className="h-8 w-px bg-slate-200 hidden md:block mx-1"></div>
           
-          {/* KHỐI ĐĂNG NHẬP / USER INFO */}
           <div className="flex items-center min-w-[140px] shrink-0">
             {!isMounted ? (
               <div className="flex items-center gap-2"><div className="w-8 h-8 rounded-full bg-slate-100 animate-pulse"></div></div>
@@ -429,7 +437,6 @@ export default function Header() {
             )}
           </div>
 
-          {/* Nút Giỏ Hàng (Cart) */}
           <div className="relative group flex items-center h-full py-4">
             <Link href="/cart" className="text-slate-600 hover:text-cyan-600 transition-colors relative ml-1 block" title="Shopping Cart">
               <ShoppingCart className="w-6 h-6" />
@@ -440,7 +447,6 @@ export default function Header() {
               )}
             </Link>
 
-            {/* KHU VỰC DROPDOWN MINI CART (Chỉ hiện khi hover) */}
             <div className="absolute right-0 top-full w-80 md:w-96 pt-2 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-300 z-[100] transform origin-top-right scale-95 group-hover:scale-100">
               <div className="bg-white rounded-2xl shadow-[0_20px_50px_-12px_rgba(0,0,0,0.15)] border border-slate-100 overflow-hidden flex flex-col">
                 
@@ -456,7 +462,6 @@ export default function Header() {
                 ) : (
                   <>
                     <div className="max-h-[320px] overflow-y-auto p-2 scrollbar-thin">
-                      {/* Chỉ hiển thị tối đa 5 sản phẩm mới nhất */}
                       {cartItems.slice(0, 5).map((item, idx) => {
                         const img = item.productImage ? item.productImage.split('|')[0] : 'https://placehold.co/100x100?text=No+Image';
                         return (
@@ -491,15 +496,12 @@ export default function Header() {
                 )}
               </div>
             </div>
-            {/* END DROPDOWN */}
           </div>
         </div>
       </div>
 
-      {/* Tier 3: Navigation with MEGA MENU */}
       <div className="hidden md:flex px-4 lg:px-8 py-0 items-center gap-8 border-t border-slate-100">
         
-        {/* MEGA MENU CONTAINER */}
         <div className="relative" ref={catMenuRef}>
           <button 
             onClick={() => setShowCategories(!showCategories)}
@@ -510,11 +512,9 @@ export default function Header() {
             <ChevronDown className={`w-4 h-4 ml-2 transition-transform ${showCategories ? 'rotate-180' : ''}`} />
           </button>
 
-          {/* ĐÃ TĂNG CHIỀU RỘNG LÊN 960PX VÀ THÊM MIN-HEIGHT */}
           {showCategories && categoriesList.length > 0 && activeCategoryData && (
             <div className="absolute top-full left-0 w-[960px] bg-white border border-slate-200 shadow-2xl rounded-b-xl overflow-hidden z-50 flex animate-in fade-in slide-in-from-top-2 duration-200">
               
-              {/* CỘT TRÁI: DANH MỤC CHÍNH */}
               <div className="w-1/3 bg-slate-50 border-r border-slate-100 min-h-[450px] max-h-[550px] overflow-y-auto">
                 <ul className="flex flex-col py-4">
                   {categoriesList.map((cat) => {
@@ -536,7 +536,6 @@ export default function Header() {
                 </ul>
               </div>
 
-              {/* CỘT PHẢI: CHI TIẾT DANH MỤC (BRANDS & PRICE) */}
               <div className="w-2/3 p-8 bg-white min-h-[450px] max-h-[550px] overflow-y-auto">
                 <div className="flex items-center justify-between mb-8 pb-4 border-b border-slate-100">
                   <h3 className="text-xl font-black text-slate-900 flex items-center gap-2">
@@ -553,7 +552,6 @@ export default function Header() {
                 </div>
 
                 <div className="grid grid-cols-2 gap-10">
-                  {/* Khu vực Hãng (Brands) */}
                   <div>
                     <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-5">Popular Brands</h4>
                     <ul className="space-y-4">
@@ -571,7 +569,6 @@ export default function Header() {
                     </ul>
                   </div>
 
-                  {/* Khu vực Giá (Price) */}
                   <div>
                     <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-5">Shop by Price</h4>
                     <ul className="space-y-4">
@@ -595,10 +592,52 @@ export default function Header() {
           )}
         </div>
 
-        <nav className="flex gap-8 text-sm font-semibold text-slate-600">
+        <nav className="flex gap-8 text-sm font-bold text-slate-600 h-full items-center">
           <Link href="/" className="hover:text-cyan-600 transition-colors">Home</Link>
+          
+          <Link href="/products" className="flex items-center gap-1.5 hover:text-cyan-600 transition-colors">
+            <Package size={18} className="text-cyan-600" /> Products
+          </Link>
+
+          <div className="relative h-full flex items-center" 
+               onMouseEnter={() => setShowShopDropdown(true)} 
+               onMouseLeave={() => setShowShopDropdown(false)}>
+            <Link href="/shops" className="flex items-center gap-1.5 hover:text-cyan-600 transition-colors">
+              <Store size={18} className="text-cyan-600" /> Shops <ChevronDown size={14} />
+            </Link>
+
+            {showShopDropdown && (
+              <div className="absolute top-full left-0 w-64 bg-white border border-slate-100 shadow-2xl rounded-2xl py-4 z-50 animate-in fade-in slide-in-from-top-2">
+                <div className="px-4 mb-3">
+                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Official Stores</span>
+                </div>
+                {loadingShops ? (
+                  <div className="px-4 py-2 flex items-center gap-2 text-slate-400 text-xs italic">
+                    <Loader2 size={14} className="animate-spin" /> Loading stores...
+                  </div>
+                ) : (
+                  <div className="space-y-1">
+                    {shops.map((shop) => (
+                      <Link 
+                        key={shop.shopId} 
+                        href={`/seller/${shop.shopId}`}
+                        className="flex items-center px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 hover:text-cyan-600 transition-all"
+                      >
+                        {shop.shopName}
+                      </Link>
+                    ))}
+                    <div className="border-t border-slate-50 mt-2 pt-2 px-4">
+                      <Link href="/shops" className="text-xs font-bold text-cyan-600 flex items-center gap-1 hover:underline">
+                        View all shops <ChevronRight size={12} />
+                      </Link>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
           <Link href="/brands" className="hover:text-cyan-600 transition-colors">Brands</Link>
-          <Link href="/seller" className="hover:text-cyan-600 transition-colors">TechStore Mall</Link>
           <Link href="/about" className="hover:text-cyan-600 transition-colors">About Us</Link>
         </nav>
       </div>

@@ -4,7 +4,9 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
-import { User, Package, MapPin, Lock, Loader2, LogOut, ShieldCheck, EyeOff, Eye } from 'lucide-react';
+import { 
+  User, Package, MapPin, Lock, Loader2, LogOut, ShieldCheck, EyeOff, Eye
+} from 'lucide-react';
 
 export default function ProfilePage() {
   const router = useRouter();
@@ -12,7 +14,6 @@ export default function ProfilePage() {
   const [saving, setSaving] = useState(false);
   const [changingPassword, setChangingPassword] = useState(false);
 
-  // State thông tin user
   const [userId, setUserId] = useState('');
   const [formData, setFormData] = useState({
     name: '',
@@ -20,7 +21,6 @@ export default function ProfilePage() {
     phone: '',
   });
 
-  // State đổi mật khẩu
   const [passwordData, setPasswordData] = useState({
     currentPassword: '',
     newPassword: '',
@@ -28,7 +28,6 @@ export default function ProfilePage() {
   });
   const [showPassword, setShowPassword] = useState(false);
 
-  // State UI
   const [activeTab, setActiveTab] = useState('account');
 
   useEffect(() => {
@@ -43,7 +42,7 @@ export default function ProfilePage() {
 
     setUserId(storedUserId);
     fetchProfileData(storedUserId, token);
-  }, []);
+  }, [router]);
 
   const fetchProfileData = async (id: string, token: string) => {
     try {
@@ -54,7 +53,7 @@ export default function ProfilePage() {
         }
       });
 
-      if (!response.ok) throw new Error('Failed to load profile data. Please try again!');
+      if (!response.ok) throw new Error('Failed to load profile data.');
 
       const data = await response.json();
       if (data.profile) {
@@ -97,11 +96,6 @@ export default function ProfilePage() {
       if (!response.ok) throw new Error('Update profile failed. Please try again!');
 
       toast.success('Update profile successful!');
-      
-      setTimeout(() => {
-        window.location.reload();
-      }, 1000);
-
     } catch (error: any) {
       toast.error(error.message);
     } finally {
@@ -109,13 +103,11 @@ export default function ProfilePage() {
     }
   };
 
-  // --- PASSWORD CHANGE HANDLER ---
   const handleUpdatePassword = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    // Check confirm password ở Frontend cho nhanh
     if (passwordData.newPassword !== passwordData.confirmPassword) {
-      toast.error('Mật khẩu xác nhận không khớp!');
+      toast.error('Passwords do not match!');
       return;
     }
 
@@ -137,11 +129,10 @@ export default function ProfilePage() {
 
       if (!response.ok) {
         const errData = await response.json().catch(() => null);
-        throw new Error(errData?.message || 'Change password fail - please check your current password and try again!');
+        throw new Error(errData?.message || 'Change password fail.');
       }
 
-      toast.success('Đổi mật khẩu thành công!');
-      // Reset form after successful change
+      toast.success('Password updated successfully!');
       setPasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' });
 
     } catch (error: any) {
@@ -179,20 +170,18 @@ export default function ProfilePage() {
   return (
     <div className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 py-10 mb-20 font-sans">
       
-      {/* Breadcrumb */}
       <div className="text-sm font-bold text-slate-400 mb-8 uppercase tracking-wide">
         <Link href="/" className="hover:text-cyan-600">Home</Link> <span className="mx-2">/</span> pages <span className="mx-2">/</span> <span className="text-slate-900">profile</span>
       </div>
 
       <div className="flex flex-col lg:flex-row gap-8 items-start">
         
-        {/* LETS SIDEBAR */}
-        <div className="w-full lg:w-1/4 flex flex-col gap-6">
+        <div className="w-full lg:w-1/4 flex flex-col gap-6 sticky top-28">
           <div className="bg-white rounded-3xl p-8 border border-slate-200 flex flex-col items-center text-center shadow-sm">
             <div className="w-28 h-28 bg-slate-100 rounded-full flex items-center justify-center mb-4 border-4 border-white shadow-md relative overflow-hidden">
                <User className="w-12 h-12 text-slate-400" />
             </div>
-            <h2 className="text-xl font-black text-slate-900 mb-1">{formData.name || 'Người dùng'}</h2>
+            <h2 className="text-xl font-black text-slate-900 mb-1">{formData.name || 'User'}</h2>
             <p className="text-sm font-medium text-slate-500 mb-3">{formData.email}</p>
             
             <div className={`px-3 py-1 rounded-full text-xs font-bold border flex items-center gap-1 ${roleBadge.color}`}>
@@ -205,9 +194,11 @@ export default function ProfilePage() {
             <button onClick={() => setActiveTab('account')} className={`flex items-center justify-between p-4 rounded-xl font-bold text-sm transition-all ${activeTab === 'account' ? 'bg-cyan-600 text-white shadow-md shadow-cyan-600/20' : 'text-slate-600 hover:bg-slate-50'}`}>
               <div className="flex items-center gap-3"><User className="w-5 h-5" /> Account Info</div>
             </button>
-            <button onClick={() => setActiveTab('orders')} className={`flex items-center justify-between p-4 rounded-xl font-bold text-sm transition-all ${activeTab === 'orders' ? 'bg-cyan-600 text-white shadow-md shadow-cyan-600/20' : 'text-slate-600 hover:bg-slate-50'}`}>
+
+            <Link href="/orders" className="flex items-center justify-between p-4 rounded-xl font-bold text-sm text-slate-600 hover:bg-slate-50 transition-all w-full text-left">
               <div className="flex items-center gap-3"><Package className="w-5 h-5" /> My Orders</div>
-            </button>
+            </Link>
+
             <button onClick={() => setActiveTab('address')} className={`flex items-center justify-between p-4 rounded-xl font-bold text-sm transition-all ${activeTab === 'address' ? 'bg-cyan-600 text-white shadow-md shadow-cyan-600/20' : 'text-slate-600 hover:bg-slate-50'}`}>
               <div className="flex items-center gap-3"><MapPin className="w-5 h-5" /> My Address</div>
             </button>
@@ -221,11 +212,10 @@ export default function ProfilePage() {
           </div>
         </div>
 
-        {/* RIGHT CONTENT */}
-        <div className="w-full lg:w-3/4 bg-white rounded-3xl p-8 lg:p-12 border border-slate-200 shadow-sm min-h-[600px]">
+        <div className="w-full lg:w-3/4">
           
           {activeTab === 'account' && (
-            <div className="animate-in fade-in duration-300">
+            <div className="bg-white rounded-3xl p-8 lg:p-12 border border-slate-200 shadow-sm min-h-[600px] animate-in fade-in duration-300">
               <h1 className="text-2xl font-black text-slate-900 mb-8">Account Info</h1>
               <form onSubmit={handleSaveProfile} className="max-w-2xl space-y-6">
                 <div>
@@ -248,9 +238,8 @@ export default function ProfilePage() {
             </div>
           )}
 
-          {/* TAB ĐỔI MẬT KHẨU MỚI */}
           {activeTab === 'security' && (
-             <div className="animate-in fade-in duration-300">
+             <div className="bg-white rounded-3xl p-8 lg:p-12 border border-slate-200 shadow-sm min-h-[600px] animate-in fade-in duration-300">
                <h1 className="text-2xl font-black text-slate-900 mb-8">Change Password</h1>
                
                <form onSubmit={handleUpdatePassword} className="max-w-2xl space-y-6">
@@ -303,7 +292,6 @@ export default function ProfilePage() {
                    </div>
                  </div>
 
-                 {/* Nút Ẩn/Hiện mật khẩu chung cho cả 3 ô */}
                  <div className="flex items-center justify-end">
                    <button 
                      type="button" 
@@ -327,11 +315,11 @@ export default function ProfilePage() {
              </div>
           )}
 
-          {(activeTab === 'orders' || activeTab === 'address') && (
-            <div className="animate-in fade-in duration-300 flex flex-col items-center justify-center py-20 text-slate-400">
-               <Package className="w-16 h-16 mb-4 opacity-50" />
-               <p className="font-bold text-lg text-slate-500">Feature Coming Soon</p>
-               <p className="text-sm">This section is currently under development.</p>
+          {activeTab === 'address' && (
+            <div className="bg-white rounded-3xl p-8 lg:p-12 border border-slate-200 shadow-sm min-h-[600px] animate-in fade-in duration-300 flex flex-col items-center justify-center text-slate-400">
+               <MapPin className="w-16 h-16 mb-4 opacity-50" />
+               <p className="font-bold text-lg text-slate-500">Address Book</p>
+               <p className="text-sm">Manage your delivery addresses here.</p>
             </div>
           )}
 

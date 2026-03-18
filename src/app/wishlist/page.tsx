@@ -6,7 +6,6 @@ import { useRouter } from 'next/navigation';
 import { Trash2, ShoppingCart, ChevronRight, HeartCrack, Loader2, Heart } from 'lucide-react';
 import toast from 'react-hot-toast';
 
-// Interface combining data from Wishlist DB and Product DB
 interface WishlistItem {
   productId: string;
   name: string;
@@ -33,7 +32,6 @@ export default function WishlistPage() {
 
     const fetchWishlist = async () => {
       try {
-        // 1. Call API to get list of wishlisted product IDs from Account/Wishlist Service (Port 8081 assumed)
         const wishlistRes = await fetch(`http://localhost:8081/api/wishlists/${userId}`, {
           headers: {
             'Authorization': `Bearer ${token}`,
@@ -49,7 +47,7 @@ export default function WishlistPage() {
         }
 
         if (wishlistRes.ok) {
-          const wishlistData = await wishlistRes.json(); // Returns array [{productId, addedAt, ...}]
+          const wishlistData = await wishlistRes.json(); 
           
           if (wishlistData.length === 0) {
             setItems([]);
@@ -57,23 +55,20 @@ export default function WishlistPage() {
             return;
           }
 
-          // 2. For each productId, call Product Service to get details (Image, Name, Price)
           const productPromises = wishlistData.map(async (item: any) => {
             const prodRes = await fetch(`http://localhost:8083/api/internal/products/${item.productId}`);
             if (prodRes.ok) {
               const prodData = await prodRes.json();
               return {
                 ...prodData,
-                addedAt: item.addedAt // Keep the date added to wishlist
+                addedAt: item.addedAt 
               };
             }
             return null;
           });
 
-          // Wait for all Product API calls to complete
           const products = await Promise.all(productPromises);
           
-          // Filter out null products (products deleted from system)
           setItems(products.filter(p => p !== null));
         }
       } catch (error) {
@@ -87,7 +82,6 @@ export default function WishlistPage() {
     fetchWishlist();
   }, [router]);
 
-  // REMOVE WISHLIST ITEM
   const handleRemoveItem = async (productId: string) => {
     const token = localStorage.getItem('accessToken') || localStorage.getItem('token');
     const userId = localStorage.getItem('userId');
@@ -99,11 +93,9 @@ export default function WishlistPage() {
       });
 
       if (res.ok) {
-        // Update Wishlist page UI
         setItems(prev => prev.filter(item => item.productId !== productId));
         toast.success("Removed from wishlist!");
         
-        // [IMPORTANT] Tell Header to update count!
         window.dispatchEvent(new Event('wishlistUpdated'));
       }
     } catch (error) {
@@ -111,9 +103,51 @@ export default function WishlistPage() {
     }
   };
 
-  const handleAddToCart = (productId: string) => {
-    // TODO: Will connect with Cart Service in next step
-    toast.success("Added to cart!");
+  const handleAddToCart = async (productId: string) => {
+    const token = localStorage.getItem('accessToken') || localStorage.getItem('token');
+    const userId = localStorage.getItem('userId');
+
+    if (!token || !userId) {
+      toast.error("Please login to add to cart!");
+      return;
+    }
+
+    try {
+      const res = await fetch(`http://localhost:8088/api/cart/add`, {
+        method: 'POST',
+        headers: { 
+          'Authorization': `Bearer ${token}`, 
+          'Content-Type': 'application/json',
+          'userId': userId
+        },
+        body: JSON.stringify({ 
+          productId: productId,
+          quantity: 1 
+        })
+      });
+
+      if (!res.ok) {
+        const errorText = await res.text();
+        toast.error(errorText || "Error adding to cart!");
+        return;
+      }
+
+      toast.success("Added to cart!");
+      
+      window.dispatchEvent(new Event('cartUpdated'));
+
+      fetch(`http://localhost:8090/api/recommendations/track`, {
+         method: 'POST',
+         headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+         body: JSON.stringify({ 
+           productId: productId, 
+           actionType: 'ADD_TO_CART' 
+         })
+      }).catch(() => {});
+
+    } catch (err) {
+      toast.error("Unable to connect to the cart server.");
+    }
   };
 
   if (loading) {
@@ -144,7 +178,6 @@ export default function WishlistPage() {
         </div>
 
         {items.length === 0 ? (
-          // EMPTY STATE
           <div className="bg-white rounded-3xl p-16 text-center shadow-sm border border-slate-200 flex flex-col items-center">
             <div className="w-24 h-24 bg-slate-50 rounded-full flex items-center justify-center mb-6">
               <HeartCrack className="w-12 h-12 text-slate-300" />
@@ -156,22 +189,21 @@ export default function WishlistPage() {
             </Link>
           </div>
         ) : (
-          // WISHLIST PRODUCT LIST
           <div className="flex flex-col gap-4">
             {items.map((item) => {
               const salePrice = item.price * (1 - (item.discountPercentage || 0) / 100);
-              const isOutOfStock = item.stock <= 0;
+              
+              const isOutOfStock = false; 
+              
               const imageUrl = item.mainImage ? item.mainImage.split('|')[0] : "https://placehold.co/400x400/f8fafc/94a3b8?text=No+Image";
 
               return (
                 <div key={item.productId} className="bg-white rounded-2xl p-4 sm:p-6 shadow-sm border border-slate-200 flex flex-col sm:flex-row items-center gap-6 group hover:border-cyan-300 transition-colors">
                   
-                  {/* Image */}
                   <Link href={`/products/${item.productId}`} className="w-full sm:w-32 h-32 bg-slate-50 rounded-xl border border-slate-100 p-2 shrink-0 flex items-center justify-center relative overflow-hidden cursor-pointer">
                     <img src={imageUrl} alt={item.name} className="w-full h-full object-contain group-hover:scale-110 transition-transform duration-500" />
                   </Link>
 
-                  {/* Info */}
                   <div className="flex-1 text-center sm:text-left">
                     <Link href={`/products/${item.productId}`}>
                       <h3 className="text-lg font-bold text-slate-900 hover:text-cyan-600 transition-colors line-clamp-2 mb-2">
@@ -193,7 +225,6 @@ export default function WishlistPage() {
                     </span>
                   </div>
 
-                  {/* Actions */}
                   <div className="flex sm:flex-col w-full sm:w-auto gap-3 shrink-0">
                     <button 
                       onClick={() => handleAddToCart(item.productId)}

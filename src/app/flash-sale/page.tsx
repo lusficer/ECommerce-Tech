@@ -21,10 +21,8 @@ export default function FlashSalePage() {
   const [page, setPage] = useState(0);
   const [hasMore, setHasMore] = useState(true);
   
-  // [NEW] STATE TO STORE WISHLISTED PRODUCT IDS
   const [wishlistedIds, setWishlistedIds] = useState<Set<string>>(new Set());
 
-  // Get user's Wishlist
   const fetchUserWishlist = async () => {
     const token = localStorage.getItem('accessToken') || localStorage.getItem('token');
     const userId = localStorage.getItem('userId');
@@ -36,7 +34,6 @@ export default function FlashSalePage() {
       });
       if (res.ok) {
         const data = await res.json();
-        // Collect all wishlisted productIds into a Set for fast lookup
         const ids = new Set<string>(data.map((item: any) => item.productId));
         setWishlistedIds(ids);
       }
@@ -45,7 +42,6 @@ export default function FlashSalePage() {
     }
   };
 
-  // Function to load Flash Sale data
   const fetchProducts = async (pageNumber: number) => {
     try {
       const res = await fetch(`http://localhost:8083/api/internal/products/filter?size=12&page=${pageNumber}&sort=discount_desc`);
@@ -67,7 +63,6 @@ export default function FlashSalePage() {
     }
   };
 
-  // Load initial data
   useEffect(() => {
     fetchProducts(0);
     fetchUserWishlist();
@@ -136,7 +131,6 @@ export default function FlashSalePage() {
   return (
     <div className="min-h-screen bg-slate-50 font-sans pb-20">
       
-      {/* HEADER BANNER */}
       <div className="bg-slate-900 py-12 relative overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-r from-orange-600/20 to-transparent z-0"></div>
         <div className="max-w-[1200px] mx-auto px-4 sm:px-6 relative z-10 flex flex-col items-center text-center">
@@ -160,7 +154,6 @@ export default function FlashSalePage() {
           <span className="text-slate-900">Flash Sale</span>
         </div>
 
-        {/* PRODUCT GRID */}
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6">
           {products.map((product) => {
             const isOutOfStock = product.stock <= 0;
@@ -168,7 +161,6 @@ export default function FlashSalePage() {
             const savedAmount = product.price - salePrice;
             const imageUrl = product.mainImage ? product.mainImage.split('|')[0] : "https://placehold.co/400x400?text=No+Image";
             
-            // [NEW] Check if this product is wishlisted
             const isWishlisted = wishlistedIds.has(product.productId);
 
             return (
@@ -183,7 +175,6 @@ export default function FlashSalePage() {
                   )}
                   <button 
                     onClick={(e) => handleWishlist(e, product.productId)}
-                    // [NEW] Change heart button color based on status
                     className={`pointer-events-auto p-2 backdrop-blur-sm shadow-sm rounded-full transition-all ${
                       isWishlisted 
                         ? 'bg-red-50 text-red-500' 

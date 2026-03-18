@@ -32,7 +32,6 @@ export default function NewReleasesPage() {
 
   const fetchProducts = async (pageNumber: number) => {
     try {
-      // API to get latest products
       const res = await fetch(`http://localhost:8083/api/internal/products/filter?size=12&page=${pageNumber}&sort=latest`);
       if (!res.ok) throw new Error("Failed to load data");
       const data = await res.json();
@@ -67,7 +66,6 @@ export default function NewReleasesPage() {
 
   return (
     <div className="min-h-screen bg-slate-50 font-sans pb-20">
-      {/* BLUE BANNER */}
       <div className="bg-slate-900 py-12 relative overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-r from-blue-600/20 to-transparent z-0"></div>
         <div className="max-w-[1200px] mx-auto px-4 sm:px-6 relative z-10 flex flex-col items-center text-center">
@@ -84,7 +82,6 @@ export default function NewReleasesPage() {
           <Link href="/" className="hover:text-blue-500 transition-colors">Home</Link> <ChevronRight className="w-4 h-4 mx-2" /> <span className="text-slate-900">New Releases</span>
         </div>
 
-        {/* PRODUCT GRID (Same as Flash Sale) */}
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6">
           {products.map((product) => {
             const isOutOfStock = product.stock <= 0;

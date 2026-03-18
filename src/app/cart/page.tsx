@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation'; 
 import { ShoppingCart, Trash2, ArrowRight, ShieldCheck, Loader2, Store } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -14,6 +15,7 @@ interface CartItemResponse {
   unitPrice: number;
   quantity: number;
   subTotal: number;
+  discountPercentage?: number; 
 }
 
 interface CartResponse {
@@ -25,13 +27,13 @@ interface CartResponse {
 }
 
 export default function CartPage() {
+  const router = useRouter(); // [MỚI] Khởi tạo router
   const [cart, setCart] = useState<CartResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [updatingId, setUpdatingId] = useState<number | null>(null);
   
   const [selectedItems, setSelectedItems] = useState<Set<number>>(new Set());
   
-  // [MỚI] State lưu trữ bản đồ (Map) từ shopId -> Tên Shop thật
   const [shopNames, setShopNames] = useState<Record<string, string>>({});
 
   const fetchCart = async () => {
@@ -70,7 +72,7 @@ export default function CartPage() {
         setShopNames(namesMap);
       }
     } catch (err) {
-      toast.error("Không thể kết nối với máy chủ giỏ hàng.");
+      toast.error("Cannot load cart data. Please try again!");
     } finally {
       setLoading(false);
     }
@@ -95,7 +97,7 @@ export default function CartPage() {
         setCart(await res.json());
         window.dispatchEvent(new Event('cartUpdated')); 
         if (newQty <= 0) {
-           toast.success("Đã xóa sản phẩm khỏi giỏ hàng.");
+           toast.success("Item removed from cart!");
            setSelectedItems(prev => {
              const newSet = new Set(prev);
              newSet.delete(itemId);
@@ -104,7 +106,7 @@ export default function CartPage() {
         }
       }
     } catch (err) {
-      toast.error("Lỗi kết nối mạng!");
+      toast.error("Cannot connect to cart server!");
     } finally {
       setUpdatingId(null);
     }
@@ -129,12 +131,12 @@ export default function CartPage() {
         setCart(await res.json());
         setSelectedItems(new Set()); 
         window.dispatchEvent(new Event('cartUpdated')); 
-        toast.success(`Đã xóa ${itemIdsToDelete.length} sản phẩm.`);
+        toast.success(`Successfully removed ${itemIdsToDelete.length} items from cart.`);
       } else {
-        toast.error("Lỗi khi xóa sản phẩm!");
+        toast.error("Error occurred while removing items from cart!");
       }
     } catch (err) {
-      toast.error("Lỗi kết nối mạng!");
+      toast.error("Cannot connect to cart server!");
     }
   };
 
@@ -169,6 +171,17 @@ export default function CartPage() {
       }
       return newSet;
     });
+  };
+
+  const handleProceedToCheckout = () => {
+    if (selectedItems.size === 0) {
+      toast.error("Please select items to checkout");
+      return;
+    }
+    const selectedIdsArray = Array.from(selectedItems);
+    localStorage.setItem('selectedCheckoutItems', JSON.stringify(selectedIdsArray));
+    
+    router.push('/checkout');
   };
 
   if (loading) return <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50"><Loader2 className="w-12 h-12 animate-spin text-cyan-600 mb-4" /></div>;
@@ -233,7 +246,6 @@ export default function CartPage() {
             {Object.entries(groupedItems).map(([shopId, shopItems]) => {
               const isShopAllSelected = shopItems.every(item => selectedItems.has(item.itemId));
               
-
               return (
                 <div key={shopId} className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
                   
@@ -255,6 +267,11 @@ export default function CartPage() {
                       const img = item.productImage ? item.productImage.split('|')[0] : 'https://placehold.co/200x200?text=No+Image';
                       const isUpdating = updatingId === item.itemId;
                       const isSelected = selectedItems.has(item.itemId);
+
+                      const hasDiscount = item.discountPercentage && item.discountPercentage > 0;
+                      const originalPrice = hasDiscount 
+                        ? item.unitPrice / (1 - (item.discountPercentage as number) / 100) 
+                        : item.unitPrice;
 
                       return (
                         <div key={item.itemId} className={`p-5 flex flex-col sm:flex-row gap-6 items-center sm:items-start transition-all relative ${isUpdating ? 'opacity-50 pointer-events-none' : ''} ${isSelected ? 'bg-cyan-50/30' : 'hover:bg-slate-50'}`}>
@@ -279,8 +296,21 @@ export default function CartPage() {
                               </Link>
                             </div>
 
-                            <div className="text-lg font-black text-cyan-600 mb-4">
-                              {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(item.unitPrice)}
+                            <div className="flex flex-wrap items-center gap-2 mb-4">
+                              <span className="text-lg font-black text-cyan-600">
+                                {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(item.unitPrice)}
+                              </span>
+                              
+                              {hasDiscount && (
+                                <>
+                                  <span className="text-sm font-medium text-slate-400 line-through">
+                                    {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(originalPrice)}
+                                  </span>
+                                  <span className="bg-yellow-400 text-slate-900 text-[10px] font-black px-2 py-0.5 rounded uppercase tracking-wider">
+                                    -{item.discountPercentage}%
+                                  </span>
+                                </>
+                              )}
                             </div>
 
                             <div className="mt-auto flex items-center justify-between">
@@ -339,6 +369,7 @@ export default function CartPage() {
               </div>
               
               <button 
+                onClick={handleProceedToCheckout}
                 disabled={selectedItems.size === 0}
                 className={`w-full py-4 font-black text-lg rounded-xl transition-all flex items-center justify-center gap-2 mb-4 group ${selectedItems.size > 0 ? 'bg-slate-900 text-white hover:bg-cyan-600 hover:-translate-y-0.5 shadow-md' : 'bg-slate-200 text-slate-400 cursor-not-allowed'}`}
               >

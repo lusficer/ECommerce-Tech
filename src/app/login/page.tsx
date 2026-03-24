@@ -36,7 +36,9 @@ const router = useRouter();
         localStorage.setItem('accessToken', data.accessToken);
       }
       if (data.userId) {
-        localStorage.setItem('userId', data.userId);        
+        localStorage.setItem('userId', data.userId);    
+        localStorage.setItem('role', data.userId);
+
       }      
       toast.success('Login successful! Redirecting...');
       

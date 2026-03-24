@@ -6,18 +6,20 @@ import Link from 'next/link';
 import toast from 'react-hot-toast';
 import { 
   TrendingUp, DollarSign, Package, Calendar, Loader2, 
-  ChevronLeft, BarChart3, ShoppingBag
+  ChevronLeft, BarChart3, ShoppingBag, Store
 } from 'lucide-react';
 import { 
   LineChart, Line, BarChart, Bar, XAxis, YAxis, 
   CartesianGrid, Tooltip, ResponsiveContainer 
 } from 'recharts';
 
-export default function ShopManagerDashboard() {
+export default function UnifiedAnalyticsDashboard() {
   const router = useRouter();
 
   const [loading, setLoading] = useState(true);
   const [shopId, setShopId] = useState<string>(''); 
+  const [shops, setShops] = useState<any[]>([]); 
+  const [userRole, setUserRole] = useState<string>(''); // Lưu role hiện tại
   
   const [revenueData, setRevenueData] = useState<any[]>([]);
   const [topProducts, setTopProducts] = useState<any[]>([]);
@@ -39,45 +41,82 @@ export default function ShopManagerDashboard() {
   useEffect(() => {
     const token = localStorage.getItem('accessToken');
     const storedUserId = localStorage.getItem('userId'); 
-
+    const storedRole = localStorage.getItem('role') || '';
     if (!token || !storedUserId) {
       router.push('/login');
       return;
     }
 
-    fetchShopByManagerId(storedUserId, token);
+    setUserRole(storedRole);
+
+    if (storedRole.startsWith('SHOP_MNG')) {
+      fetchManagerShops(storedUserId, token, storedRole);
+    } else if (storedRole.startsWith('VEND')) {
+      fetchVendorShops(storedUserId, token, storedRole);
+    } else {
+      toast.error("Unauthorized access. Invalid user format.");
+
+    }
   }, [router]);
 
-  const fetchShopByManagerId = async (managerId: string, token: string) => {
+  // API lấy Shop cho MANAGER
+  const fetchManagerShops = async (userId: string, token: string, role: string) => {
     try {
-      const res = await fetch(`http://localhost:8082/api/shops/owner/${managerId}`, {
+      const res = await fetch(`http://localhost:8082/api/shops/owner/${userId}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
-      
-      if (res.ok) {
-        const data = await res.json();
-        if (data && data[0]?.shopId) {
-          const actualShopId = data[0].shopId;
-          setShopId(actualShopId);
-          fetchShopStats(actualShopId, token, startDate, endDate);
-        } else {
-          setLoading(false);
-          toast.error("Your account is not associated with any shop. Please contact support.");
-        }
-      } else {
-        setLoading(false);
-        toast.error("Unable to verify shop information.");
-      }
+      handleShopResponse(res, token, role, "You don't own any shops.");
     } catch (err) {
       console.error(err);
       setLoading(false);
     }
   };
 
-  const fetchShopStats = async (sId: string, token: string, start: string, end: string) => {
+  // API lấy Shop cho VENDOR
+  const fetchVendorShops = async (userId: string, token: string, role: string) => {
+    try {
+      const res = await fetch(`http://localhost:8082/api/shops/my-assigned-shops`, {
+        headers: { 
+          'Authorization': `Bearer ${token}`,
+          'userId': userId
+        }
+      });
+      handleShopResponse(res, token, role, "You are not assigned to manage any Shop!");
+    } catch (err) {
+      console.error(err);
+      setLoading(false);
+    }
+  };
+
+  // Hàm xử lý chung sau khi lấy được danh sách Shop
+  const handleShopResponse = async (res: Response, token: string, role: string, emptyMsg: string) => {
+    if (res.ok) {
+      const data = await res.json();
+      if (data && data.length > 0) {
+        setShops(data); 
+        const actualShopId = data[0].shopId; 
+        setShopId(actualShopId);
+        fetchShopStats(actualShopId, token, startDate, endDate, role); // Gọi stats với role tương ứng
+      } else {
+        setLoading(false);
+        toast.error(emptyMsg);
+      }
+    } else {
+      setLoading(false);
+      toast.error("Unable to verify shop information.");
+    }
+  };
+
+  const fetchShopStats = async (sId: string, token: string, start: string, end: string, role: string) => {
     setLoading(true);
     try {
-      const revRes = await fetch(`http://localhost:8087/api/manager/stats/shop/${sId}/revenue?startDate=${start}&endDate=${end}`, {
+      // Logic verify Base URL dựa trên Role
+      const isManager = role.startsWith('SHOP_MNG');
+      const statsBaseUrl = isManager 
+        ? `http://localhost:8087/api/manager/stats/shop/${sId}`
+        : `http://localhost:8087/api/vendor/stats/${sId}`;
+
+      const revRes = await fetch(`${statsBaseUrl}/revenue?startDate=${start}&endDate=${end}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       
@@ -100,7 +139,7 @@ export default function ShopManagerDashboard() {
         }
       }
 
-      const topRes = await fetch(`http://localhost:8087/api/manager/stats/shop/${sId}/top-products`, {
+      const topRes = await fetch(`${statsBaseUrl}/top-products`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       
@@ -111,7 +150,7 @@ export default function ShopManagerDashboard() {
       }
       
     } catch (err) {
-      console.error(err);
+      console.error("Error fetching stats:", err);
       toast.error("Error occurred while fetching analytics data.");
     } finally {
       setLoading(false);
@@ -121,7 +160,16 @@ export default function ShopManagerDashboard() {
   const handleDateFilter = () => {
     const token = localStorage.getItem('accessToken');
     if (token && shopId) {
-      fetchShopStats(shopId, token, startDate, endDate);
+      fetchShopStats(shopId, token, startDate, endDate, userRole);
+    }
+  };
+
+  const handleShopChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const newShopId = e.target.value;
+    setShopId(newShopId);
+    const token = localStorage.getItem('accessToken');
+    if (token) {
+      fetchShopStats(newShopId, token, startDate, endDate, userRole);
     }
   };
 
@@ -129,7 +177,7 @@ export default function ShopManagerDashboard() {
   const totalOrders = revenueData.reduce((sum, item) => sum + (item.totalOrders || 0), 0);
   const totalItems = revenueData.reduce((sum, item) => sum + (item.totalItemsSold || 0), 0);
 
-  if (loading && revenueData.length === 0 && topProducts.length === 0) {
+  if (loading && revenueData.length === 0 && topProducts.length === 0 && shops.length === 0) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50">
         <Loader2 className="w-10 h-10 animate-spin text-cyan-600" />
@@ -137,27 +185,50 @@ export default function ShopManagerDashboard() {
     );
   }
 
+  // Tùy chỉnh link Back dựa theo Role
+  const backLinkUrl = userRole.includes('MANAGER') ? '/manager/dashboard' : '/vendor/dashboard';
+
   return (
     <div className="min-h-screen bg-slate-50 font-sans pb-12">
       <div className="bg-slate-900 border-b border-slate-800 pt-8 pb-6">
         <div className="max-w-[1200px] mx-auto px-4 sm:px-6 lg:px-8">
-          <Link href="/manager/dashboard" className="inline-flex items-center text-xs font-bold text-slate-400 hover:text-cyan-400 mb-4 transition-colors">
+          <Link href={backLinkUrl} className="inline-flex items-center text-xs font-bold text-slate-400 hover:text-cyan-400 mb-4 transition-colors">
             <ChevronLeft className="w-4 h-4 mr-1" /> Back to Workspace
           </Link>
           <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
             <div>
               <h1 className="text-2xl font-black text-white flex items-center gap-2">
                 <BarChart3 className="w-6 h-6 text-cyan-400" /> 
-                Shop Analytics 
+                {userRole.includes('MANAGER') ? 'Shop Analytics' : 'Vendor Analytics'}
               </h1>
               <p className="text-sm text-slate-400 mt-1">
-                Business performance and top-selling products of the shop.
+                Business performance of your {userRole.includes('MANAGER') ? 'owned' : 'assigned'} shops.
               </p>
             </div>
             
-            <div className="flex items-center gap-2 bg-slate-800 p-1.5 rounded-xl mt-4 md:mt-0">
+            <div className="flex flex-wrap items-center gap-2 bg-slate-800 p-1.5 rounded-xl mt-4 md:mt-0">
+              
+              {/* SHOP DROPDOWN */}
+              {shops.length > 0 && (
+                <div className="flex items-center bg-slate-900 px-3 py-2 rounded-lg border border-slate-700">
+                  <Store className="w-4 h-4 text-cyan-400 mr-2 shrink-0" />
+                  <select 
+                    value={shopId} 
+                    onChange={handleShopChange}
+                    className="bg-transparent text-sm text-white font-medium outline-none cursor-pointer w-[160px] appearance-none"
+                  >
+                    {shops.map((shop) => (
+                      <option key={shop.shopId} value={shop.shopId} className="bg-slate-800 text-white">
+                        {/* Hỗ trợ cả shopName (Vendor API) và name (Manager API) */}
+                        {shop.shopName || shop.name || `Shop #${shop.shopId.substring(0, 8)}`}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
               <div className="flex items-center bg-slate-900 px-3 py-2 rounded-lg border border-slate-700">
-                <Calendar className="w-4 h-4 text-slate-400 mr-2" />
+                <Calendar className="w-4 h-4 text-slate-400 mr-2 shrink-0" />
                 <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="bg-transparent text-sm text-white outline-none cursor-pointer" />
               </div>
               <span className="text-slate-500 font-bold">-</span>

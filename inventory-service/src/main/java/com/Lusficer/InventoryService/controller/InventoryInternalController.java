@@ -32,6 +32,13 @@ public class InventoryInternalController {
         return ResponseEntity.ok("Reserved successfully");
     }
 
+    @PostMapping("/update-stock")
+    public ResponseEntity<?> updateStock(@RequestParam("productId") String productId, 
+                                        @RequestParam("quantity") int quantity) {
+        inventoryService.updateStock(productId, quantity);
+        return ResponseEntity.ok("Stock updated successfully");
+    }
+
     @PostMapping("/confirm/{orderId}")
     public ResponseEntity<?> confirmSale(@PathVariable("orderId") String orderId) {
         inventoryService.confirmSale(orderId);

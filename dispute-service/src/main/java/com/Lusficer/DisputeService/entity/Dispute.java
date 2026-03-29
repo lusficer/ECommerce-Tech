@@ -19,8 +19,8 @@ public class Dispute {
     @Schema(description = "Order ID associated with the dispute", example = "ORD_VIRTUAL_001")
     private String orderId;
     
-    @Schema(description = "Vendor ID", example = "VEND_001")
-    private String vendorId;
+    @Schema(description = "User ID", example = "CUST_001")
+    private String userId;
     
     @Schema(description = "Shop ID", example = "SHOP_001")
     private String shopId;

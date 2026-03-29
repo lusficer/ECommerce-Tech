@@ -66,7 +66,7 @@ public class VendorProductController {
     @ApiResponse(responseCode = "403", description = "Forbidden - insufficient permissions (VENDOR role required)")
     public ResponseEntity<Product> updateProduct(
             @RequestHeader("X-Shop-Id") String shopId,
-            @PathVariable String productId,
+            @PathVariable("productId") String productId,
             @Valid @org.springframework.web.bind.annotation.RequestBody ProductRequestDTO request) {
         return ResponseEntity.ok(productService.updateProduct(productId, shopId, request));
     }

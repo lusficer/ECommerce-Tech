@@ -66,6 +66,7 @@ public class SecurityConfig {
         
         configuration.setAllowedOrigins(List.of(
             "http://localhost:8080", 
+            "http://localhost:3000", 
             "http://192.168.1.237:8080",
             "http://192.168.1.200:8080", 
             "http://10.238.45.231:8080",

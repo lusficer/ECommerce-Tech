@@ -106,7 +106,6 @@ public class AccountManagementService {
         throw new IllegalArgumentException("Invalid role name: " + roleName);
     }
 
-    // 🔍 Kiểm tra user đã có role chưa
     Optional<UserRole> existingRole = userRoleRepository.findByUserId(userId);
 
     UserRole role;

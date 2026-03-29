@@ -81,6 +81,22 @@ public class InventoryService {
         }
     }
 
+    @Transactional
+public void updateStock(String productId, int newQuantity) {
+    Inventory inventory = inventoryRepo.findByProductId(productId).orElse(null);
+    if (inventory == null) {
+        inventory = new Inventory();
+        inventory.setProductId(productId);
+        inventory.setSku("SKU-" + productId.substring(0, Math.min(8, productId.length())));
+        inventory.setQuantity(newQuantity);
+        inventory.setReservedQuantity(0);
+        inventory.setSafetyStockLevel(10); 
+    } else {
+        inventory.setQuantity(newQuantity);
+    }
+    inventoryRepo.save(inventory);
+}
+
     public Integer getAvailableStock(String productId) {
         Inventory i = inventoryRepo.findByProductId(productId).orElse(null);
         if (i == null) return 0;

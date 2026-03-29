@@ -37,23 +37,48 @@ public class ProductService {
         product.setApprovalStatus(ApprovalStatus.PENDING);
         product.setSubmittedAt(LocalDateTime.now());
         
-        return productRepository.save(product);
+        product = productRepository.save(product);
+
+        if (request.getStockQuantity() != null) {
+            inventoryClient.updateStock(product.getProductId(), request.getStockQuantity());
+        }
+
+        return product;
     }
 
     @Transactional
     public Product updateProduct(String productId, String shopId, ProductRequestDTO request) {
-        Product product = productRepository.findById(productId)
+        Product existingProduct = productRepository.findById(productId)
                 .orElseThrow(() -> new RuntimeException("Product not found"));
 
-        if (!product.getShopId().equals(shopId)) {
+        if (!existingProduct.getShopId().equals(shopId)) {
             throw new RuntimeException("Unauthorized access");
         }
+        boolean isSensitiveChanged = false;
+        
+        if (!existingProduct.getName().equals(request.getName()) || 
+            !existingProduct.getImageUrl().equals(request.getImageUrl()) ||
+            !existingProduct.getDescription().equals(request.getDescription()) ||
+            !existingProduct.getCategoryId().equals(request.getCategoryId())) {
+            
+            isSensitiveChanged = true; 
+        }
 
-        mapDtoToEntity(request, product);
-        product.setApprovalStatus(ApprovalStatus.PENDING);
-        product.setSubmittedAt(LocalDateTime.now());
+        mapDtoToEntity(request, existingProduct);
 
-        return productRepository.save(product);
+        if (isSensitiveChanged) {
+            existingProduct.setApprovalStatus(ApprovalStatus.PENDING);
+            existingProduct.setSubmittedAt(LocalDateTime.now());
+        } 
+        
+
+        existingProduct = productRepository.save(existingProduct);
+
+        if (request.getStockQuantity() != null) {
+            inventoryClient.updateStock(existingProduct.getProductId(), request.getStockQuantity());
+        }
+
+        return existingProduct;
     }
 
     @Transactional
@@ -153,6 +178,16 @@ public class ProductService {
                 .orElseThrow(() -> new RuntimeException("Product not found with ID: " + productId));
     }
 
+        public Map<String, String> getProductNamesBatch(List<String> ids) {
+        return productRepository.findByProductIdIn(ids)
+            .stream()
+            .collect(Collectors.toMap(
+                Product::getProductId,
+                Product::getName
+            ));
+    }
+
+
 
     public ProductInternalDto getProductForInternal(String productId) {
         Product product = productRepository.findById(productId)
@@ -234,7 +269,7 @@ public class ProductService {
     }
 
         public List<ProductInternalDto> searchProductsInternal(String keyword) {
-        List<Product> products = productRepository.findByNameContainingIgnoreCaseAndIsDeletedFalse(keyword);
+        List<Product> products = productRepository.findByNameContainingIgnoreCaseAndApprovalStatusAndIsDeletedFalse(keyword, ApprovalStatus.APPROVED);
         return products.stream()
             .limit(5)
             .map(this::mapToInternalDtoSimple)
@@ -261,15 +296,17 @@ public class ProductService {
 
         Sort sorting = Sort.unsorted();
 
-    if ("price_asc".equals(sortOption)) {
-        sorting = JpaSort.unsafe(Sort.Direction.ASC, "(price * (1.0 - (COALESCE(discountPercentage, 0) / 100.0)))");
-    } else if ("price_desc".equals(sortOption)) {
-        sorting = JpaSort.unsafe(Sort.Direction.DESC, "(price * (1.0 - (COALESCE(discountPercentage, 0) / 100.0)))");
-    } else {
-        sorting = Sort.by(Sort.Direction.DESC, "createdAt");
-    }
+        if ("price_asc".equals(sortOption)) {
+            sorting = JpaSort.unsafe(Sort.Direction.ASC, "(price * (1.0 - (COALESCE(discountPercentage, 0) / 100.0)))");
+        } else if ("price_desc".equals(sortOption)) {
+            sorting = JpaSort.unsafe(Sort.Direction.DESC, "(price * (1.0 - (COALESCE(discountPercentage, 0) / 100.0)))");
+        } else if ("discount_desc".equals(sortOption)) {
+            sorting = Sort.by(Sort.Direction.DESC, "discountPercentage");
+        } else {
+            sorting = Sort.by(Sort.Direction.DESC, "createdAt");
+        }
 
-    Pageable pageable = PageRequest.of(page, size, sorting);
+        Pageable pageable = PageRequest.of(page, size, sorting);
         Page<Product> productPage = productRepository.filterProducts(keyword, categoryId, brand, min, max, pageable);
         
         return productPage.map(this::mapToInternalDtoSimple);

@@ -8,6 +8,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.UUID;
 
 @Service
@@ -24,14 +25,14 @@ public class DisputeService {
 
     // --- VENDOR USE CASES ---
 
-    // UC: Submit Order Dispute
     @Transactional
-    public Dispute createDispute(String vendorId, CreateDisputeRequest request) {
-        // TODO: Validate OrderId exists via OrderService FeignClient
+    public Dispute createDispute(String userId, String shopId, CreateDisputeRequest request) {
 
         Dispute dispute = new Dispute();
-        dispute.setDisputeId(UUID.randomUUID().toString());
-        dispute.setVendorId(vendorId);
+        String shortUuid = UUID.randomUUID().toString().substring(0, 8).toUpperCase();
+        dispute.setDisputeId("DISP-" + shortUuid);
+        dispute.setUserId(userId);
+        dispute.setShopId(shopId);
         dispute.setOrderId(request.getOrderId());
         dispute.setReason(DisputeReason.valueOf(request.getReason()));
         dispute.setDescription(request.getDescription());
@@ -39,14 +40,13 @@ public class DisputeService {
         
         Dispute savedDispute = disputeRepository.save(dispute);
 
-        // Lưu bằng chứng ban đầu
         if (request.getInitialEvidence() != null) {
             for (EvidenceDTO e : request.getInitialEvidence()) {
-                addEvidence(savedDispute.getDisputeId(), vendorId, e);
+                addEvidence(savedDispute.getDisputeId(), userId, e);
             }
         }
         
-        logAction(savedDispute.getDisputeId(), vendorId, "CREATE", "Dispute created");
+        logAction(savedDispute.getDisputeId(), userId, "CREATE", "Dispute created");
         return savedDispute;
     }
 
@@ -79,6 +79,9 @@ public class DisputeService {
         Dispute dispute = disputeRepository.findById(disputeId)
                 .orElseThrow(() -> new RuntimeException("Dispute not found"));
         
+
+        List<DisputeEvidence> evidenceList = evidenceRepository.findByDisputeId(disputeId);
+        dispute.setEvidenceList(evidenceList);
         // Khi Manager xem lần đầu, chuyển sang UNDER_REVIEW
         if (dispute.getStatus() == DisputeStatus.PENDING) {
             dispute.setStatus(DisputeStatus.UNDER_REVIEW);
@@ -119,6 +122,21 @@ public class DisputeService {
 
         disputeRepository.save(dispute);
         logAction(disputeId, request.getManagerId(), "RESOLVE", "Dispute resolved as " + request.getResolutionType());
+    }
+
+    // --- LIST USE CASES (NEW) ---
+
+    
+    public List<Dispute> getDisputesByUser(String userId) {
+        return disputeRepository.findByUserId(userId);
+    }
+
+    /**
+     * List all disputes belonging to a specific shop.
+     * Used by: GET /api/manager/disputes (header SHOP-ID)
+     */
+    public List<Dispute> getDisputesByShop(String shopId) {
+        return disputeRepository.findByShopId(shopId);
     }
 
     private void logAction(String disputeId, String actorId, String action, String message) {

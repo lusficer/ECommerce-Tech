@@ -15,20 +15,27 @@ import com.Lusficer.UserService.repository.UserProfileRepository;
 import com.Lusficer.UserService.repository.UserRoleRepository;
 import com.Lusficer.UserService.repository.UserStatusRepository;
 
+import io.github.bucket4j.Bandwidth;
+import io.github.bucket4j.Bucket;
+import io.github.bucket4j.Refill;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
-import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.Duration;
 import java.time.LocalDateTime;
+import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
 @RestController
 @RequestMapping("/api/auth")
@@ -43,39 +50,58 @@ public class AuthController {
     private final UserRoleRepository roleRepo;
     private final PasswordEncoder passwordEncoder;
     private final UserStatusRepository statusRepo;
-       
-        @PostMapping("/login")
-        @Operation(summary = "Login", description = "Login → returns JWT")
-        public ResponseEntity<LoginResponse> login(@Valid @RequestBody LoginRequest req) {
+
+    private final Map<String, Bucket> cache = new ConcurrentHashMap<>();
+
+    private Bucket createNewBucket() {
+        Bandwidth limit = Bandwidth.classic(5, Refill.greedy(5, Duration.ofMinutes(15)));
+        return Bucket.builder().addLimit(limit).build();
+    }
+    // ---------------------------------------------
+
+    @PostMapping("/login")
+    @Operation(summary = "Login", description = "Login → returns JWT")
+    public ResponseEntity<?> login(@Valid @RequestBody LoginRequest req, HttpServletRequest request) { // Thêm HttpServletRequest
+        
+        String ip = request.getRemoteAddr();
+        
+        Bucket bucket = cache.computeIfAbsent(ip, k -> createNewBucket());
+
+        if (!bucket.tryConsume(1)) {
+            return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                    .body(Map.of("error", "Too many login attempts. Please try again after 15 minutes."));
+        }
+
         Authentication auth = authenticationManager.authenticate(
                 new UsernamePasswordAuthenticationToken(req.email(), req.password())
         );
         String jwt = jwtTokenProvider.generateToken(auth);
         UserProfile user = profileRepo.findByEmail(req.email())
             .orElseThrow(() -> new RuntimeException("User not found"));
+            
         return ResponseEntity.ok(new LoginResponse(jwt, user.getUserId()));
+    }
+
+    @PostMapping("/register")
+    @Operation(summary = "Register user", description = "Create a user account and assign a role (selectable via dropdown)")
+    public ResponseEntity<RegistrationResponse> register(@Valid @RequestBody RegisterRequest request) {
+       
+        String userLabel;
+        switch (request.role().name()) {
+            case "ADMIN" -> userLabel = "ADMIN";
+            case "CUSTOMER" -> userLabel = "CUST";
+            case "SHOP_MANAGER" -> userLabel = "SHOP_MNG";
+            case "VENDOR" -> userLabel = "VEND";
+            case "GUEST" -> userLabel = "GUEST";
+            case "WAREHOUSE_MANAGER" -> userLabel = "WM";
+            case "SHIPPER" -> userLabel = "SH"; 
+            default -> userLabel = "U";
         }
 
-        @PostMapping("/register")
-        @Operation(summary = "Register user", description = "Create a user account and assign a role (selectable via dropdown)")
-        public ResponseEntity<RegistrationResponse> register(@Valid @RequestBody RegisterRequest request) {
-       
-                String userLabel;
-                switch (request.role().name()) {
-                    case "ADMIN" -> userLabel = "ADMIN";
-                    case "CUSTOMER" -> userLabel = "CUST";
-                    case "SHOP_MANAGER" -> userLabel = "SHOP_MNG";
-                    case "VENDOR" -> userLabel = "VEND";
-                    case "GUEST" -> userLabel = "GUEST";
-                    case "WAREHOUSE_MANAGER" -> userLabel = "WM";
-                    case "SHIPPER" -> userLabel = "SH"; 
-                    default -> userLabel = "U";
-                }
-
-                // Count existing users with this prefix and compute next sequence number
-                long existing = profileRepo.countByUserIdStartingWith(userLabel + "_");
-                int next = (int) existing + 1;
-                String userId = String.format("%s_%03d", userLabel, next);
+        // Count existing users with this prefix and compute next sequence number
+        long existing = profileRepo.countByUserIdStartingWith(userLabel + "_");
+        int next = (int) existing + 1;
+        String userId = String.format("%s_%03d", userLabel, next);
 
         UserProfile profile = UserProfile.builder()
                 .userId(userId)
@@ -96,17 +122,17 @@ public class AuthController {
                 .build();
         authRepo.save(auth);
 
-                String prefix;
-                switch (request.role().name()) {
-                    case "ADMIN" -> prefix = "AD";
-                    case "CUSTOMER" -> prefix = "C";
-                    case "SHOP_MANAGER" -> prefix = "S";
-                    case "VENDOR" -> prefix = "V";
-                    case "GUEST" -> prefix = "G";
-                    case "SHIPPER" -> prefix = "SH";
-                    default -> prefix = "U";
-                }
-                String roleId = String.format("%s-%03d", prefix, next);
+        String prefix;
+        switch (request.role().name()) {
+            case "ADMIN" -> prefix = "AD";
+            case "CUSTOMER" -> prefix = "C";
+            case "SHOP_MANAGER" -> prefix = "S";
+            case "VENDOR" -> prefix = "V";
+            case "GUEST" -> prefix = "G";
+            case "SHIPPER" -> prefix = "SH";
+            default -> prefix = "U";
+        }
+        String roleId = String.format("%s-%03d", prefix, next);
 
         UserRole role = UserRole.builder()
                 .roleId(roleId)

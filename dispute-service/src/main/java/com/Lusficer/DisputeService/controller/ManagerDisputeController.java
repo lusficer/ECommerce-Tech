@@ -11,6 +11,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
 import java.util.Map;
 
 @RestController
@@ -21,6 +22,13 @@ public class ManagerDisputeController {
 
     @Autowired
     private DisputeService disputeService;
+
+    // UC: List all disputes for a shop
+    @GetMapping
+    public ResponseEntity<List<Dispute>> listShopDisputes(
+            @RequestHeader("SHOP-ID") String shopId) {
+        return ResponseEntity.ok(disputeService.getDisputesByShop(shopId));
+    }
 
     // UC: Review Order Dispute
     @GetMapping("/{disputeId}")

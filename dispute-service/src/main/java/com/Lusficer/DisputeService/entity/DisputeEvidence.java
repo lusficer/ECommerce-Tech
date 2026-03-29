@@ -24,7 +24,7 @@ public class DisputeEvidence {
     private String disputeId;
 
     @Column(nullable = false)
-    @Schema(description = "ID of the uploader (Vendor or Manager)")
+    @Schema(description = "ID of the uploader (User)")
     @JsonProperty("uploaderId")
     private String uploaderId;
 

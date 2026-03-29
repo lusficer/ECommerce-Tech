@@ -12,6 +12,7 @@ const ORDER_STATUS_MAP: Record<string, { classes: string; label: string }> = {
   SHIPPING:             { classes: 'bg-purple-50 text-purple-600 border-purple-200', label: 'Shipping' },
   DELIVERED:            { classes: 'bg-green-50 text-green-600 border-green-200', label: 'Delivered' },
   COMPLETED:            { classes: 'bg-teal-50 text-teal-600 border-teal-200',    label: 'Completed' },
+  DISPUTED:             { classes: 'bg-orange-50 text-orange-700 border-orange-200', label: 'Disputed' },
   CANCELLED:            { classes: 'bg-red-50 text-red-600 border-red-200',       label: 'Cancelled' },
   REJECTED:             { classes: 'bg-red-100 text-red-800 border-red-300',      label: 'Rejected' },
   RETURNED:             { classes: 'bg-gray-100 text-gray-600 border-gray-200',   label: 'Returned' },

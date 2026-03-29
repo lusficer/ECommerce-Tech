@@ -23,7 +23,7 @@ export default function CartItemCard({
   onUpdateQuantity,
 }: CartItemCardProps) {
   const img = getFirstImage(item.productImage, 'https://placehold.co/200x200?text=No+Image');
-  const hasDiscount = item.discountPercentage && item.discountPercentage > 0;
+  const hasDiscount = (item.discountPercentage || 0) > 0;
   const originalPrice = hasDiscount
     ? getOriginalPrice(item.unitPrice, item.discountPercentage as number)
     : item.unitPrice;

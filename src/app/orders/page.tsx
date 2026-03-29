@@ -9,16 +9,21 @@ import toast from 'react-hot-toast';
 
 import { getAuth } from '@/lib/auth';
 import { getFirstImage } from '@/lib/format';
+import { apiGet, apiPost } from '@/lib/api';
+import { getLatestDispute, getEffectiveOrderStatus } from '@/lib/disputeHelpers';
 import LoadingScreen from '@/components/ui/LoadingScreen';
 import Modal from '@/components/ui/Modal';
 import OrderCard from '@/components/orders/OrderCard';
 import ReviewModal from '@/components/orders/ReviewModal';
+import DisputeModal from '@/components/orders/DisputeModal';
+import DisputeStatus from '@/components/orders/DisputeStatus';
 
 const ORDER_TABS = [
   { id: 'ALL',       label: 'All Orders', statuses: [] },
   { id: 'PENDING',   label: 'Pending',    statuses: ['NEW', 'PENDING_VERIFICATION', 'PROCESSING', 'READY_TO_SHIP'] },
   { id: 'SHIPPING',  label: 'Shipping',   statuses: ['SHIPPING'] },
   { id: 'COMPLETED', label: 'Completed',  statuses: ['DELIVERED', 'COMPLETED'] },
+  { id: 'DISPUTED',  label: 'Disputed',   statuses: ['DISPUTED'] },
   { id: 'CANCELLED', label: 'Cancelled',  statuses: ['CANCELLED', 'REJECTED', 'RETURNED', 'DELIVERY_FAILED'] },
 ];
 
@@ -35,6 +40,8 @@ export default function OrdersPage() {
   const [cancelModal, setCancelModal] = useState({ isOpen: false, orderId: '' });
 
   const [reviewTarget, setReviewTarget] = useState<any>(null);
+  const [disputeTarget, setDisputeTarget] = useState<any>(null);
+  const [viewDisputeTarget, setViewDisputeTarget] = useState<any>(null);
 
   // ─── Fetch ───────────────────────────────────────────────────────────────────
   const fetchOrderHistory = async () => {
@@ -52,7 +59,34 @@ export default function OrdersPage() {
 
       if (res.ok) {
         const data = await res.json();
-        setOrders(data);
+
+        let disputesByOrderId: Record<string, any[]> = {};
+        try {
+          const disputes = await apiGet<any[]>('dispute', '/api/user/disputes', {
+            userIdHeader: 'X-User-Id',
+          });
+
+          disputesByOrderId = (disputes || []).reduce((accumulator: Record<string, any[]>, dispute: any) => {
+            const orderDisputes = accumulator[dispute.orderId] || [];
+            accumulator[dispute.orderId] = [...orderDisputes, dispute];
+            return accumulator;
+          }, {});
+        } catch {
+          disputesByOrderId = {};
+        }
+
+        const orderWithDisputes = data.map((order: any) => {
+          const disputes = disputesByOrderId[order.orderId] || [];
+          const latestDispute = getLatestDispute(disputes);
+          return {
+            ...order,
+            disputes,
+            latestDispute,
+            disputeStatus: latestDispute?.status,
+          };
+        });
+
+        setOrders(orderWithDisputes);
 
         // Fetch shop names in parallel
         const uniqueIds = Array.from(new Set<string>(data.map((o: any) => o.shopId)));
@@ -114,7 +148,10 @@ export default function OrdersPage() {
   // ─── Derived state ────────────────────────────────────────────────────────────
   const filteredOrders = orders.filter((o) => {
     if (activeTab === 'ALL') return true;
-    return ORDER_TABS.find((t) => t.id === activeTab)?.statuses.includes(o.orderStatus) ?? false;
+    if (activeTab === 'DISPUTED') return Boolean(o.latestDispute);
+
+    const effectiveStatus = getEffectiveOrderStatus(o.orderStatus, o.disputeStatus);
+    return ORDER_TABS.find((t) => t.id === activeTab)?.statuses.includes(effectiveStatus) ?? false;
   });
   const visibleOrders = filteredOrders.slice(0, visibleCount);
 
@@ -125,6 +162,36 @@ export default function OrdersPage() {
       productName: item.productName,
       productImage: getFirstImage(item.productImage, 'https://placehold.co/100x100?text=No+Image'),
     });
+
+  const submitDispute = async (payload: { reason: string; description: string; images: string[] }) => {
+    if (!disputeTarget) return;
+    try {
+      await apiPost(
+        'dispute',
+        '/api/user/disputes',
+        {
+          orderId: disputeTarget.orderId,
+          reason: payload.reason,
+          description: payload.description,
+          initialEvidence: payload.images.map((image, index) => ({
+            fileUrl: image,
+            fileType: 'IMAGE',
+            description: `Evidence ${index + 1}`,
+          })),
+        },
+        {
+          userIdHeader: 'X-User-Id',
+          headers: { 'X-Shop-Id': disputeTarget.shopId || '' },
+        }
+      );
+      toast.success('Dispute submitted successfully.');
+      setDisputeTarget(null);
+      await fetchOrderHistory();
+    } catch (error: any) {
+      toast.error(error?.message || 'Failed to submit dispute.');
+      throw error;
+    }
+  };
 
   // ─── Render ──────────────────────────────────────────────────────────────────
   if (loading) return <LoadingScreen />;
@@ -172,6 +239,13 @@ export default function OrdersPage() {
                 onCancel={(id) => setCancelModal({ isOpen: true, orderId: id })}
                 onConfirmReceipt={handleConfirmReceipt}
                 onReview={openReviewModal}
+                onDispute={(selectedOrder, mode) => {
+                  if (mode === 'view') {
+                    setViewDisputeTarget(selectedOrder.latestDispute || null);
+                    return;
+                  }
+                  setDisputeTarget(selectedOrder);
+                }}
               />
             ))}
 
@@ -230,6 +304,60 @@ export default function OrdersPage() {
           onClose={() => setReviewTarget(null)}
         />
       )}
+
+      {disputeTarget && (
+        <DisputeModal
+          isOpen={Boolean(disputeTarget)}
+          orderId={disputeTarget.orderId}
+          onClose={() => setDisputeTarget(null)}
+          onSubmit={submitDispute}
+        />
+      )}
+
+      <Modal
+        isOpen={Boolean(viewDisputeTarget)}
+        onClose={() => setViewDisputeTarget(null)}
+        title="Dispute Details"
+        headerClassName="bg-orange-50"
+        maxWidth="max-w-lg"
+      >
+        {viewDisputeTarget && (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-black text-slate-900">Dispute #{viewDisputeTarget.disputeId}</p>
+              <DisputeStatus status={viewDisputeTarget.status} />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 text-sm">
+              <div>
+                <p className="text-xs font-bold text-slate-400 uppercase">Order</p>
+                <p className="font-bold text-slate-800">#{viewDisputeTarget.orderId}</p>
+              </div>
+              <div>
+                <p className="text-xs font-bold text-slate-400 uppercase">Created</p>
+                <p className="font-bold text-slate-800">
+                  {new Date(viewDisputeTarget.createdAt).toLocaleString('en-US', {
+                    dateStyle: 'medium',
+                    timeStyle: 'short',
+                  })}
+                </p>
+              </div>
+            </div>
+
+            <div>
+              <p className="text-xs font-bold text-slate-400 uppercase mb-1">Reason</p>
+              <p className="text-sm font-bold text-slate-800">{String(viewDisputeTarget.reason || '').replace(/_/g, ' ')}</p>
+            </div>
+
+            <div>
+              <p className="text-xs font-bold text-slate-400 uppercase mb-1">Description</p>
+              <p className="text-sm text-slate-700 bg-slate-50 border border-slate-200 rounded-xl p-3">
+                {viewDisputeTarget.description || 'No description'}
+              </p>
+            </div>
+          </div>
+        )}
+      </Modal>
     </div>
   );
 }

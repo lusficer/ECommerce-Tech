@@ -24,7 +24,7 @@ interface ProductFormProps {
   shopSearchQuery: string;
   shopSearchResults: any[];
   isSearchingShop: boolean;
-  showShopSearch: boolean; // true for VENDOR role
+  showShopSearch: boolean; 
   onFormChange: (data: ProductFormData) => void;
   onShopSearch: (keyword: string) => void;
   onShopSelect: (shop: any) => void;

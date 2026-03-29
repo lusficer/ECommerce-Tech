@@ -5,9 +5,11 @@ import React from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
-  Store, Clock, Package, Truck, CheckCircle2, XCircle, Loader2, Star,
+  Store, Clock, Package, Truck, CheckCircle2, XCircle, Loader2, Star, Scale,
 } from 'lucide-react';
 import { formatCurrency, getFirstImage } from '@/lib/format';
+import DisputeStatus from '@/components/orders/DisputeStatus';
+import { canFileDispute, getEffectiveOrderStatus } from '@/lib/disputeHelpers';
 
 interface OrderCardProps {
   order: any;
@@ -16,6 +18,7 @@ interface OrderCardProps {
   onCancel: (orderId: string) => void;
   onConfirmReceipt: (orderId: string) => void;
   onReview: (order: any, item: any) => void;
+  onDispute: (order: any, mode: 'create' | 'view') => void;
 }
 
 function getStatusInfo(status: string) {
@@ -31,6 +34,8 @@ function getStatusInfo(status: string) {
     case 'DELIVERED':
     case 'COMPLETED':
       return { color: 'text-green-600', icon: CheckCircle2, label: 'Completed' };
+    case 'DISPUTED':
+      return { color: 'text-orange-600', icon: Scale, label: 'Disputed' };
     case 'CANCELLED':
     case 'REJECTED':
     case 'RETURNED':
@@ -42,14 +47,17 @@ function getStatusInfo(status: string) {
 }
 
 export default function OrderCard({
-  order, shopName, isActionLoading, onCancel, onConfirmReceipt, onReview,
+  order, shopName, isActionLoading, onCancel, onConfirmReceipt, onReview, onDispute,
 }: OrderCardProps) {
   const router = useRouter();
-  const statusInfo = getStatusInfo(order.orderStatus);
+  const effectiveStatus = getEffectiveOrderStatus(order.orderStatus, order.disputeStatus);
+  const statusInfo = getStatusInfo(effectiveStatus);
   const StatusIcon = statusInfo.icon;
   const canCancel = ['NEW', 'PENDING_VERIFICATION'].includes(order.orderStatus);
   const canConfirm = order.orderStatus === 'DELIVERED';
   const canReview  = ['DELIVERED', 'COMPLETED'].includes(order.orderStatus);
+  const hasDispute = Boolean(order.latestDispute);
+  const canDispute = canFileDispute(order.orderStatus, order.latestDispute);
 
   return (
     <div className={`bg-white border border-slate-200 shadow-sm overflow-hidden hover:shadow-md transition-shadow ${isActionLoading ? 'opacity-50 pointer-events-none' : ''}`}>
@@ -69,6 +77,12 @@ export default function OrderCard({
           <StatusIcon className="w-4 h-4" /> {statusInfo.label}
         </span>
       </div>
+
+      {order.disputeStatus && (
+        <div className="px-6 pt-3">
+          <DisputeStatus status={order.disputeStatus} />
+        </div>
+      )}
 
       {/* Items preview */}
       <div className="p-6 cursor-pointer" onClick={() => router.push(`/orders/${order.orderId}`)}>
@@ -139,6 +153,22 @@ export default function OrderCard({
               className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-6 py-2.5 bg-orange-500 text-white font-bold text-sm rounded-sm hover:bg-orange-600 transition-all shadow-sm"
             >
               <Star className="w-4 h-4" /> Rate
+            </button>
+          )}
+          {hasDispute && (
+            <button
+              onClick={() => onDispute(order, 'view')}
+              className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-6 py-2.5 bg-white border border-orange-200 text-orange-600 font-bold text-sm rounded-sm hover:bg-orange-50 transition-all shadow-sm"
+            >
+              <Scale className="w-4 h-4" /> View Dispute
+            </button>
+          )}
+          {!hasDispute && canDispute && (
+            <button
+              onClick={() => onDispute(order, 'create')}
+              className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-6 py-2.5 bg-white border border-orange-200 text-orange-600 font-bold text-sm rounded-sm hover:bg-orange-50 transition-all shadow-sm"
+            >
+              <Scale className="w-4 h-4" /> Dispute
             </button>
           )}
           <Link

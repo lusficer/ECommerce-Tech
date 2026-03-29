@@ -5,7 +5,7 @@ import React from 'react';
 import Link from 'next/link';
 import {
   Store, Truck, TrendingUp, Package, ShieldCheck,
-  Settings, ShoppingBag, ClipboardList, BarChart3, Brain,
+  Settings, ShoppingBag, ClipboardList, BarChart3, Brain, Scale,
 } from 'lucide-react';
 
 type Role = 'VENDOR' | 'MANAGER' | 'SHIPPER';
@@ -136,6 +136,17 @@ export default function Sidebar({
           <Link href="/shipper/orders" className="flex items-center gap-3 p-4 rounded-xl font-bold text-sm text-slate-600 hover:text-cyan-600 hover:bg-cyan-50 transition-all">
             <Truck className="w-5 h-5" /> Delivery Dashboard
           </Link>
+        )}
+        
+        {role !== 'SHIPPER' && (
+          <button
+            onClick={() => onTabChange('disputes')}
+            className={`flex items-center gap-3 p-4 rounded-xl font-bold text-sm transition-all w-full text-left ${
+              activeTab === 'disputes' ? 'bg-cyan-50 text-cyan-600' : 'text-slate-600 hover:bg-slate-50'
+            }`}
+          >
+            <Scale className="w-5 h-5" /> Disputes
+          </button>
         )}
       </div>
     </div>

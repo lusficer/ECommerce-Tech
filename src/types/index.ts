@@ -56,11 +56,39 @@ export interface OrderItem {
   reviewStatus?: string;
 }
 
+export type OrderStatus =
+  | 'NEW'
+  | 'PENDING_VERIFICATION'
+  | 'PROCESSING'
+  | 'READY_TO_SHIP'
+  | 'SHIPPING'
+  | 'DELIVERED'
+  | 'COMPLETED'
+  | 'DISPUTED'
+  | 'CANCELLED'
+  | 'REJECTED'
+  | 'RETURNED'
+  | 'DELIVERY_FAILED'
+  | string;
+
+export type DisputeStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | string;
+
+export interface Dispute {
+  disputeId: string;
+  orderId: string;
+  reason: string;
+  description: string;
+  status: DisputeStatus;
+  imageUrls?: string[];
+  createdAt: string;
+  updatedAt?: string;
+}
+
 export interface Order {
   orderId: string;
   shopId: string;
   userId: string;
-  status: string;
+  status: OrderStatus;
   paymentMethod: string;
   paymentStatus?: string;
   subTotal: number;
@@ -73,6 +101,8 @@ export interface Order {
   updatedAt?: string;
   note?: string;
   trackingNumber?: string;
+  disputeStatus?: DisputeStatus;
+  disputes?: Dispute[];
 }
 
 export interface RecommendationItem {

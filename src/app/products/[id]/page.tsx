@@ -9,6 +9,7 @@ import {
   MessageSquare, Cpu, Package, CreditCard, ThumbsUp, UserCircle2
 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { useAddToCart } from '@/hooks/useAddToCart';
 
 interface ProductInternalDto {
   productId: string;
@@ -39,6 +40,7 @@ export default function ProductDetailPage() {
   const router = useRouter();
   const params = useParams();
   const productId = params.id as string;
+  const { addingIds, addToCart } = useAddToCart();
 
   const [product, setProduct] = useState<ProductInternalDto | null>(null);
   const [loading, setLoading] = useState(true);
@@ -333,6 +335,34 @@ export default function ProductDetailPage() {
     }
   };
 
+  const handleAddAllToCart = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    
+    if (!product) return;
+    
+    const token = localStorage.getItem('accessToken') || localStorage.getItem('token');
+    const userId = localStorage.getItem('userId');
+    
+    if (!token || !userId) {
+      toast.error('Please log in to add items to cart!');
+      return;
+    }
+
+    try {
+      // Add the current product first
+      await addToCart(e, decodeURIComponent(productId), 1, false);
+      
+      // Add all frequently bought items
+      for (const item of frequentlyBought) {
+        await addToCart(e, item.productId, 1, false);
+      }
+      
+      toast.success('All items added to cart!');
+    } catch (error) {
+      toast.error('Error adding items to cart');
+    }
+  };
+
   const currentQty = Number(quantity) || 1; 
   const handleQuantityChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value;
@@ -526,8 +556,20 @@ export default function ProductDetailPage() {
                   <span className="text-3xl font-black text-cyan-600 mb-4 tracking-tight">
                     {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(salePrice + frequentlyBought.reduce((sum, item) => sum + (item.discountPercentage > 0 ? item.price * (1 - item.discountPercentage / 100) : item.price), 0))}
                   </span>
-                  <button className="w-full md:w-auto px-8 py-3.5 bg-slate-900 text-white font-black rounded-xl hover:bg-cyan-600 hover:-translate-y-0.5 transition-all shadow-md flex items-center justify-center gap-2">
-                    <ShoppingCart className="w-5 h-5" /> Add All to Cart
+                  <button 
+                    onClick={handleAddAllToCart}
+                    disabled={addingIds.size > 0}
+                    className="w-full md:w-auto px-8 py-3.5 bg-slate-900 text-white font-black rounded-xl hover:bg-cyan-600 hover:-translate-y-0.5 transition-all shadow-md flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {addingIds.size > 0 ? (
+                      <>
+                        <Loader2 className="w-5 h-5 animate-spin" /> Adding...
+                      </>
+                    ) : (
+                      <>
+                        <ShoppingCart className="w-5 h-5" /> Add All to Cart
+                      </>
+                    )}
                   </button>
                 </div>
               </div>

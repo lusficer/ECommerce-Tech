@@ -13,6 +13,7 @@ import DashboardTab from '@/components/seller/DashboardTab';
 import ProductsTab from '@/components/seller/ProductsTab';
 import ProductForm, { ProductFormData } from '@/components/seller/ProductForm';
 import ApprovalTab from '@/components/seller/ApprovalTab';
+import DisputesTab from '@/components/seller/DisputesTab';
 import {
   ProductReviewModal, DiscountModal, RejectModal, DeleteConfirmModal,
 } from '@/components/seller/SellerModals';
@@ -352,6 +353,10 @@ export default function SellerDashboard() {
               queue={approvalQueue}
               onReview={(product) => setDetailModal({ isOpen: true, product })}
             />
+          )}
+
+          {activeTab === 'disputes' && role !== 'SHIPPER' && (
+            <DisputesTab userId={userId} shopId={role === 'VENDOR' ? vendorShopId : shopData.shopId} />
           )}
         </div>
       </div>

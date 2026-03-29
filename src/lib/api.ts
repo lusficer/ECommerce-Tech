@@ -5,6 +5,7 @@ export const SERVICE_URLS = {
   user:           'http://localhost:8081',
   shop:           'http://localhost:8082',
   product:        'http://localhost:8083',
+  dispute:        'http://localhost:8084',
   order:          'http://localhost:8086',
   cart:           'http://localhost:8088',
   inventory:      'http://localhost:8089',

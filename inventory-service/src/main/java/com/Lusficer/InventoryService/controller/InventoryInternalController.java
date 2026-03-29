@@ -55,4 +55,9 @@ public class InventoryInternalController {
     public ResponseEntity<Map<String, Integer>> checkStock(@RequestParam("productIds") List<String> productIds) {
         return ResponseEntity.ok(inventoryService.getStockStatus(productIds));
     }
+
+    @PostMapping("/check-stock")
+    public ResponseEntity<Map<String, Integer>> checkStockPost(@RequestBody List<String> productIds) {
+        return ResponseEntity.ok(inventoryService.getStockStatus(productIds));
+    }
 }

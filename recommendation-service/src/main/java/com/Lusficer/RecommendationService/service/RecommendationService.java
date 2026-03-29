@@ -195,7 +195,7 @@ public class RecommendationService {
     }
 
     private Map<String, Integer> safeCheckStock(List<String> ids) {
-        try { return inventoryClient.checkStockBatch(ids); } 
+        try { return inventoryClient.checkStockBatchPost(ids); } 
         catch (Exception e) { return new HashMap<>(); }
     }
 }

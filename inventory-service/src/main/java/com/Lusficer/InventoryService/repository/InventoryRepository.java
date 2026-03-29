@@ -27,5 +27,5 @@ public interface InventoryRepository extends JpaRepository<Inventory, Long> {
     // Locked batch — dùng khi cần lock nhiều sản phẩm cùng lúc (ví dụ: batch reserve)
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT i FROM Inventory i WHERE i.productId IN :productIds ORDER BY i.productId")
-    List<Inventory> findByProductIdIn(List<String> productIds);
+    List<Inventory> findByProductIdIn(@Param("productIds") List<String> productIds);
 }

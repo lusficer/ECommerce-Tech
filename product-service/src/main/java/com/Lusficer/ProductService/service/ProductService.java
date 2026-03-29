@@ -102,7 +102,8 @@ public class ProductService {
                 .collect(Collectors.toList());
 
         try {
-            Map<String, Integer> stockMap = inventoryClient.checkStockBatch(productIds);
+            Map<String, Integer> stockMap = inventoryClient.checkStockBatchPost(productIds);
+
             
             for (Product p : products) {
                 p.setStockQuantity(stockMap.getOrDefault(p.getProductId(), 0));

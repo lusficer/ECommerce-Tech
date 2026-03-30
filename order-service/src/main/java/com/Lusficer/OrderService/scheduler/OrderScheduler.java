@@ -42,6 +42,9 @@ public class OrderScheduler {
         }
     }
 
+    /**
+     * Marks an order as completed and persists the change.
+     */
     private void internalCompleteOrder(Order order) {
         order.setOrderStatus(OrderStatus.COMPLETED);
         orderRepository.save(order);

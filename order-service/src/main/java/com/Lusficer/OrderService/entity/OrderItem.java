@@ -1,6 +1,6 @@
 package com.Lusficer.OrderService.entity;
 
-import com.fasterxml.jackson.annotation.JsonIgnore; // <--- Import cái này
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.*;
 import java.math.BigDecimal;
@@ -14,8 +14,8 @@ public class OrderItem {
 
     @ManyToOne
     @JoinColumn(name = "orderId")
-    @JsonIgnore  // <--- THÊM DÒNG NÀY: Ngăn không cho JSON in ngược lại Order cha
-    @ToString.Exclude // (Optional) Ngăn Lombok in vòng lặp khi debug
+    @JsonIgnore
+    @ToString.Exclude
     private Order order;
 
     private String productId;

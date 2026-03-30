@@ -1,6 +1,6 @@
 package com.Lusficer.OrderService.entity;
 
-import com.fasterxml.jackson.annotation.JsonIgnore; // <--- Import
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -13,7 +13,7 @@ public class OrderAddress {
 
     @OneToOne
     @JoinColumn(name = "orderId")
-    @JsonIgnore // <--- THÊM DÒNG NÀY
+    @JsonIgnore
     @ToString.Exclude
     private Order order;
 

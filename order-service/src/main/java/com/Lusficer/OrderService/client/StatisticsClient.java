@@ -1,4 +1,3 @@
-// File: src/main/java/com/Lusficer/OrderService/client/StatisticsClient.java
 package com.Lusficer.OrderService.client;
 
 import org.springframework.cloud.openfeign.FeignClient;
@@ -13,10 +12,13 @@ import lombok.AllArgsConstructor;
 @FeignClient(name = "statistic-service", url= "http://localhost:8087") 
 public interface StatisticsClient {
 
+    /**
+     * Syncs completed order statistics to the statistics service.
+     */
     @PostMapping("/api/internal/stats/sync-order")
     void syncOrder(@RequestBody OrderCompletedEvent event);
 
-    // DTO dùng để gửi dữ liệu đi
+    // DTOs used to send order metrics.
     @Data @AllArgsConstructor
     class OrderCompletedEvent {
         private String shopId;

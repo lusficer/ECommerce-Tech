@@ -269,7 +269,7 @@ public class OrderService {
 
         if (newStatus == OrderStatus.SHIPPING) {
             trackingNumber = "GHTK-" + System.currentTimeMillis();
-            carrier = "Giao Hang Tiet Kiem";
+            carrier = "GHTK Express";
             description = "Order handed over to carrier";
         }
 

@@ -1,4 +1,3 @@
-// File: src/main/java/com/Lusficer/OrderService/config/FeignAuthInterceptor.java
 package com.Lusficer.OrderService.config;
 
 import feign.RequestInterceptor;
@@ -11,6 +10,9 @@ import org.springframework.web.context.request.ServletRequestAttributes;
 @Configuration
 public class FeignAuthInterceptor implements RequestInterceptor {
 
+    /**
+     * Propagates the Authorization header to downstream Feign requests.
+     */
     @Override
     public void apply(RequestTemplate template) {
         ServletRequestAttributes attributes = (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
@@ -19,7 +21,6 @@ public class FeignAuthInterceptor implements RequestInterceptor {
             HttpServletRequest request = attributes.getRequest();
             String authorizationHeader = request.getHeader("Authorization");
             
-            // Nếu có token, tự động đính kèm vào Feign Request để gửi sang ShopService
             if (authorizationHeader != null) {
                 template.header("Authorization", authorizationHeader);
             }

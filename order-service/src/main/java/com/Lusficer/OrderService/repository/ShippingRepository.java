@@ -10,9 +10,13 @@ import java.util.Optional;
 @Repository
 public interface ShippingRepository extends JpaRepository<Shipping, Long> {
 
-    // Tìm thông tin vận chuyển dựa vào mã Đơn hàng
+    /**
+     * Finds shipping details by order ID.
+     */
     Optional<Shipping> findByOrderId(String orderId);
 
-    // Tìm tất cả các đơn hàng mà một Shipper cụ thể đang phụ trách
+    /**
+     * Finds shipments assigned to a specific shipper ordered by creation time.
+     */
     List<Shipping> findByShipperIdOrderByCreatedAtDesc(String shipperId);
 }

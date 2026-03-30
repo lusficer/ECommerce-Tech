@@ -19,20 +19,20 @@ public class Shipping {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long shippingId;
 
-    // Liên kết 1-1 với Order (Một đơn hàng có 1 chuyến đi giao)
+    // One-to-one mapping to order (one order per shipment)
     @Column(nullable = false, unique = true)
     private String orderId;
 
-    // Mã của Shipper (người giao hàng), ví dụ: SHIPPER_001
+    // Shipper identifier (for example: SHIPPER_001)
     @Column(nullable = false)
     private String shipperId;
 
-    // Trạng thái vận chuyển chi tiết
+    // Detailed shipping status
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private ShippingStatus status;
 
-    // Ghi chú thêm của Shipper (VD: "Khách hẹn chiều giao", "Không gọi được")
+    // Additional shipper note (for example: "Deliver in the afternoon")
     @Column(columnDefinition = "TEXT")
     private String note;
 

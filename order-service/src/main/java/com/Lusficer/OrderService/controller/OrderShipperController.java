@@ -23,28 +23,31 @@ public class OrderShipperController {
     private final ShippingService shippingService;
 
     /**
-     * API cập nhật trạng thái vận chuyển của Shipper
-     * Request body mong đợi: { "status": "DELIVERED", "note": "Giao giờ hành chính" }
+     * Updates shipping status for a shipper.
+     * Expected body example: { "status": "DELIVERED", "note": "Delivered during business hours" }
      */
     @PutMapping("/{orderId}/status")
     public ResponseEntity<ShippingResponseDTO> updateOrderStatusByShipper(
             @PathVariable("orderId") String orderId,
             @RequestHeader(value = "userId", required = false, defaultValue = "SHIPPER_001") String shipperId, 
             @RequestBody ShippingRequestDTO request) {
-        
-        // Gán orderId từ PathVariable vào request để đảm bảo an toàn dữ liệu
         request.setOrderId(orderId);
         
         ShippingResponseDTO updatedShipping = shippingService.updateShippingStatus(shipperId, request);
         return ResponseEntity.ok(updatedShipping);
     }
     
+    /**
+     * Returns orders available for pickup by a shipper.
+     */
     @GetMapping("/available")
     public ResponseEntity<List<Order>> getAvailableOrders() {
         return ResponseEntity.ok(shippingService.getAvailableOrders());
     }
 
-    // Lấy danh sách đơn hàng mà Shipper này ĐÃ NHẬN
+    /**
+     * Returns the current shipper's assigned orders by status.
+     */
     @GetMapping("/my-deliveries")
     public ResponseEntity<List<Order>> getMyDeliveries(
             @RequestHeader(value = "userId") String shipperId,
@@ -52,7 +55,9 @@ public class OrderShipperController {
         return ResponseEntity.ok(shippingService.getMyAssignedOrders(shipperId, status));
     }
 
-    // API để Shipper bấm "Nhận đơn hàng này"
+    /**
+     * Accepts an available order for the shipper.
+     */
     @PutMapping("/{orderId}/accept")
     public ResponseEntity<String> acceptOrder(
             @PathVariable("orderId") String orderId,

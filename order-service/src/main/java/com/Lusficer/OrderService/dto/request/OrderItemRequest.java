@@ -1,4 +1,3 @@
-// File: OrderItemRequest.java (Dùng trong PlaceOrder)
 package com.Lusficer.OrderService.dto.request;
 import lombok.Data;
 import java.math.BigDecimal;

@@ -1,4 +1,3 @@
-// File: Order.java
 package com.Lusficer.OrderService.entity;
 
 import com.Lusficer.OrderService.enums.OrderStatus;
@@ -16,8 +15,8 @@ public class Order {
     @Id
     private String orderId;
 
-    private String userId; // User đặt
-    private String shopId; // Shop bán
+    private String userId; // Customer who placed the order
+    private String shopId; // Shop that sells the order
 
     private BigDecimal subTotal;
     private BigDecimal shippingFee;
@@ -34,15 +33,15 @@ public class Order {
     @Enumerated(EnumType.STRING)
     private OrderStatus orderStatus;
 
-    // Dành cho Manager verify
+    // Manager verification metadata
     private Boolean isVerified;
     private String verifiedBy;
 
-    // Quan hệ 1-N với OrderItem
+    // One-to-many relationship with order items
     @OneToMany(mappedBy = "order", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     private List<OrderItem> orderItems;
 
-    // Quan hệ 1-1 với Address
+    // One-to-one relationship with shipping address
     @OneToOne(mappedBy = "order", cascade = CascadeType.ALL)
     private OrderAddress orderAddress;
 

@@ -25,6 +25,9 @@ public class SecurityConfig {
 
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
 
+    /**
+     * Configures security filters and authorization rules.
+     */
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
@@ -37,7 +40,7 @@ public class SecurityConfig {
             .cors(cors -> cors.configurationSource(corsConfigurationSource())) 
             
             .authorizeHttpRequests(auth -> auth
-                .requestMatchers("/").permitAll()      // Cho phép trang chủ
+                .requestMatchers("/").permitAll()
                 .requestMatchers("/error").permitAll()
                 .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                 .requestMatchers("/v3/api-docs/**",
@@ -65,6 +68,9 @@ public class SecurityConfig {
         return http.build();
     }
 
+    /**
+     * Defines the CORS policy for allowed origins and headers.
+     */
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();

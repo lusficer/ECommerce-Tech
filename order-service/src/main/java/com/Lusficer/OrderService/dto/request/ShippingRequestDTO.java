@@ -5,7 +5,7 @@ import lombok.Data;
 
 @Data
 public class ShippingRequestDTO {
-    // Không cần gửi shipperId vì ta có thể lấy từ Header/Token (nếu có Auth)
+    // Shipper ID is taken from header/token, not from request body.
     private String orderId;
     private ShippingStatus status;
     private String note;

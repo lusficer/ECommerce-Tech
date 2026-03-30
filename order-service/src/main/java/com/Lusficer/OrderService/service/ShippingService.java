@@ -30,16 +30,19 @@ public class ShippingService {
     private final InventoryClient inventoryClient;
     private final StatisticsClient statisticsClient;
 
+    /**
+     * Updates shipping status and synchronizes related order state.
+     */
     @Transactional
     public ShippingResponseDTO updateShippingStatus(String shipperId, ShippingRequestDTO request) {
         Order order = orderRepository.findById(request.getOrderId())
-                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy đơn hàng: " + request.getOrderId()));
+                .orElseThrow(() -> new ResourceNotFoundException("Order not found: " + request.getOrderId()));
 
         if (order.getOrderStatus() == OrderStatus.PENDING_VERIFICATION || 
             order.getOrderStatus() == OrderStatus.NEW ||
             order.getOrderStatus() == OrderStatus.CANCELLED ||
             order.getOrderStatus() == OrderStatus.REJECTED) {
-            throw new BadRequestException("Đơn hàng chưa được Shop chuẩn bị xong hoặc đã bị hủy, không thể cập nhật vận chuyển!");
+            throw new BadRequestException("Order is not ready for shipping updates or has been cancelled.");
         }
 
         Shipping shipping = shippingRepository.findByOrderId(request.getOrderId())
@@ -60,14 +63,14 @@ public class ShippingService {
         else if (request.getStatus() == ShippingStatus.DELIVERED) {
             order.setOrderStatus(OrderStatus.DELIVERED);
             
-            // 1. Gọi InventoryService để trừ kho thật sự (CONFIRM_SALE)
+            // Confirm inventory sale on successful delivery.
             try {
                 inventoryClient.confirmSale(order.getOrderId());
             } catch (Exception e) {
-                System.err.println("Lỗi gọi InventoryClient: " + e.getMessage());
+                System.err.println("Failed to call InventoryClient: " + e.getMessage());
             }
 
-            // 2. Gọi StatisticsService để đồng bộ doanh thu
+            // Sync completed order metrics.
             try {
                 List<ProductItemDto> items = order.getOrderItems().stream()
                         .map(item -> new ProductItemDto(
@@ -85,7 +88,7 @@ public class ShippingService {
                 );
                 statisticsClient.syncOrder(event);
             } catch (Exception e) {
-                System.err.println("Lỗi gọi StatisticsClient: " + e.getMessage());
+                System.err.println("Failed to call StatisticsClient: " + e.getMessage());
             }
         } 
         else if (request.getStatus() == ShippingStatus.FAILED) {
@@ -114,11 +117,16 @@ public class ShippingService {
                 .build();
     }
 
-     public List<Order> getAvailableOrders() {
+    /**
+     * Returns orders that are ready for a shipper to accept.
+     */
+    public List<Order> getAvailableOrders() {
         return orderRepository.findByOrderStatusAndShipperIdIsNull(OrderStatus.SHIPPING);
     }
 
-    // 2. Shipper bấm "Nhận đơn"
+    /**
+     * Assigns the order to the requesting shipper.
+     */
     public Order acceptOrder(String orderId, String shipperId) {
         Order order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new ResourceNotFoundException("Order not found"));
@@ -128,14 +136,16 @@ public class ShippingService {
         }
 
         if (order.getShipperId() != null) {
-            throw new BadRequestException("Đơn hàng này đã bị Shipper khác nhận mất rồi!");
+            throw new BadRequestException("This order has already been accepted by another shipper.");
         }
 
         order.setShipperId(shipperId);
         return orderRepository.save(order);
     }
 
-    // 3. Lấy danh sách đơn hàng CỦA RIÊNG Shipper này (Để hiện ở tab My Deliveries)
+    /**
+     * Returns orders assigned to the specified shipper filtered by status.
+     */
     public List<Order> getMyAssignedOrders(String shipperId, String status) {
         OrderStatus orderStatus = OrderStatus.valueOf(status);
         return orderRepository.findByShipperIdAndOrderStatus(shipperId, orderStatus);

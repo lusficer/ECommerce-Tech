@@ -1,9 +1,11 @@
-// File: UpdateStatusRequest.java (Vendor dùng)
 package com.Lusficer.OrderService.dto.request;
 import lombok.Data;
 
+/**
+ * Request DTO for vendor to update order status.
+ */
 @Data
 public class UpdateStatusRequest {
-    private String shopId;   // Để check quyền sở hữu
-    private String newStatus; // VD: "PROCESSING", "READY_TO_SHIP"
+    private String shopId;
+    private String newStatus;
 }

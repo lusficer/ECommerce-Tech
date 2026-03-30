@@ -1,4 +1,3 @@
-// File: src/main/java/com/Lusficer/OrderService/scheduler/OrderScheduler.java
 package com.Lusficer.OrderService.scheduler;
 
 import com.Lusficer.OrderService.entity.Order;
@@ -12,27 +11,29 @@ import org.springframework.stereotype.Component;
 import java.time.LocalDateTime;
 import java.util.List;
 
+/**
+ * Scheduled tasks for order management.
+ */
 @Component
 public class OrderScheduler {
 
     @Autowired private OrderRepository orderRepository;
     @Autowired private OrderService orderService;
 
-    // Chạy mỗi 1 giờ để quét đơn
+    /**
+     * Auto-completes delivered orders after 7 days.
+     * Runs every hour.
+     */
     @Scheduled(cron = "0 0 * * * ?") 
     public void autoCompleteOrders() {
-        // Giả sử chính sách là 7 ngày sau khi giao hàng
         LocalDateTime sevenDaysAgo = LocalDateTime.now().minusDays(7);
 
-        // Tìm các đơn DELIVERED đã quá 7 ngày
-        // Cần viết thêm method này trong Repository
         List<Order> ordersToComplete = orderRepository.findByOrderStatusAndUpdatedAtBefore(
                 OrderStatus.DELIVERED, sevenDaysAgo
         );
 
         for (Order order : ordersToComplete) {
             try {
-                // Gọi hàm nội bộ để update (không cần check user)
                 internalCompleteOrder(order);
                 System.out.println("Auto-completed order: " + order.getOrderId());
             } catch (Exception e) {
@@ -44,6 +45,5 @@ public class OrderScheduler {
     private void internalCompleteOrder(Order order) {
         order.setOrderStatus(OrderStatus.COMPLETED);
         orderRepository.save(order);
-        // Bắn event update doanh thu ở đây...
     }
 }

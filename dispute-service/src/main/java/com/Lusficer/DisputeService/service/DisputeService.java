@@ -23,8 +23,10 @@ public class DisputeService {
     @Autowired
     private DisputeActionLogRepository logRepository;
 
-    // --- VENDOR USE CASES ---
-
+    /**
+     * Creates a new dispute for a specific order.
+     * Customer initiates a dispute with reason and optional evidence.
+     */
     @Transactional
     public Dispute createDispute(String userId, String shopId, CreateDisputeRequest request) {
 
@@ -50,7 +52,10 @@ public class DisputeService {
         return savedDispute;
     }
 
-    // UC: Provide Evidence/Response
+    /**
+     * Adds evidence or response to an existing dispute.
+     * Automatically transitions status from WAITING_FOR_INFO to UNDER_REVIEW.
+     */
     @Transactional
     public void addEvidence(String disputeId, String uploaderId, EvidenceDTO evidenceDTO) {
         DisputeEvidence evidence = new DisputeEvidence();
@@ -62,7 +67,6 @@ public class DisputeService {
         
         evidenceRepository.save(evidence);
 
-        // Nếu dispute đang đợi thông tin, chuyển lại trạng thái Under Review
         Dispute dispute = disputeRepository.findById(disputeId).orElseThrow();
         if (dispute.getStatus() == DisputeStatus.WAITING_FOR_INFO) {
             dispute.setStatus(DisputeStatus.UNDER_REVIEW);
@@ -72,17 +76,17 @@ public class DisputeService {
         logAction(disputeId, uploaderId, "PROVIDE_INFO", "Added new evidence: " + evidenceDTO.getFileType());
     }
 
-    // --- SHOP MANAGER USE CASES ---
-
-    // UC: Review Order Dispute (Get Details)
+    /**
+     * Retrieves dispute details with all evidence.
+     * Auto-transitions from PENDING to UNDER_REVIEW on first view.
+     */
     public Dispute getDisputeDetails(String disputeId) {
         Dispute dispute = disputeRepository.findById(disputeId)
                 .orElseThrow(() -> new RuntimeException("Dispute not found"));
         
-
         List<DisputeEvidence> evidenceList = evidenceRepository.findByDisputeId(disputeId);
         dispute.setEvidenceList(evidenceList);
-        // Khi Manager xem lần đầu, chuyển sang UNDER_REVIEW
+        
         if (dispute.getStatus() == DisputeStatus.PENDING) {
             dispute.setStatus(DisputeStatus.UNDER_REVIEW);
             disputeRepository.save(dispute);
@@ -90,7 +94,10 @@ public class DisputeService {
         return dispute;
     }
 
-    // UC: Request Additional Information
+    /**
+     * Requests additional information from customer or vendor.
+     * Changes dispute status to WAITING_FOR_INFO.
+     */
     @Transactional
     public void requestAdditionalInfo(String disputeId, String managerId, String requestMessage) {
         Dispute dispute = disputeRepository.findById(disputeId).orElseThrow();
@@ -99,11 +106,12 @@ public class DisputeService {
         disputeRepository.save(dispute);
 
         logAction(disputeId, managerId, "REQUEST_INFO", requestMessage);
-        
-        // TODO: Gửi email/notification cho Vendor
     }
 
-    // UC: Resolve Dispute & Record Resolution Details
+    /**
+     * Resolves a dispute with approval or rejection.
+     * For approved disputes, sets refund amount.
+     */
     @Transactional
     public void resolveDispute(String disputeId, ResolveDisputeRequest request) {
         Dispute dispute = disputeRepository.findById(disputeId).orElseThrow();
@@ -111,7 +119,6 @@ public class DisputeService {
         if ("APPROVED".equalsIgnoreCase(request.getResolutionType())) {
             dispute.setStatus(DisputeStatus.RESOLVED_APPROVED);
             dispute.setRefundAmount(request.getRefundAmount());
-            // TODO: Call Payment Service to process Refund
         } else {
             dispute.setStatus(DisputeStatus.RESOLVED_REJECTED);
         }
@@ -124,16 +131,12 @@ public class DisputeService {
         logAction(disputeId, request.getManagerId(), "RESOLVE", "Dispute resolved as " + request.getResolutionType());
     }
 
-    // --- LIST USE CASES (NEW) ---
-
-    
     public List<Dispute> getDisputesByUser(String userId) {
         return disputeRepository.findByUserId(userId);
     }
 
     /**
-     * List all disputes belonging to a specific shop.
-     * Used by: GET /api/manager/disputes (header SHOP-ID)
+     * Lists all disputes belonging to a specific shop.
      */
     public List<Dispute> getDisputesByShop(String shopId) {
         return disputeRepository.findByShopId(shopId);

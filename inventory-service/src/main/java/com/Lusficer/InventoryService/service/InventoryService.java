@@ -19,8 +19,12 @@ public class InventoryService {
 
     @Autowired private InventoryRepository inventoryRepo;
     @Autowired private ReservationRepository reservationRepo;
-    @Autowired private StockLogRepository logRepo; 
+    @Autowired private StockLogRepository logRepo;
 
+    /**
+     * Reserves stock for an order with 15-minute expiry.
+     * Validates available quantity before reservation.
+     */
     @Transactional
     public boolean reserveStock(String productId, int quantity, String orderId) {
         Inventory inventory = inventoryRepo.findByProductIdLocked(productId)
@@ -47,6 +51,10 @@ public class InventoryService {
         return true;
     }
 
+    /**
+     * Confirms sale and deducts reserved stock from inventory.
+     * Removes reservation records after confirmation.
+     */
     @Transactional
     public void confirmSale(String orderId) {
         List<InventoryReservation> reservations = reservationRepo.findByOrderId(orderId);
@@ -65,6 +73,10 @@ public class InventoryService {
         }
     }
 
+    /**
+     * Releases reserved stock back to available inventory.
+     * Called when order is cancelled or payment fails.
+     */
     @Transactional
     public void releaseStock(String orderId) {
         List<InventoryReservation> reservations = reservationRepo.findByOrderId(orderId);
@@ -81,6 +93,10 @@ public class InventoryService {
         }
     }
 
+    /**
+     * Updates total stock quantity for a product.
+     * Creates new inventory record if doesn't exist.
+     */
     @Transactional
 public void updateStock(String productId, int newQuantity) {
     Inventory inventory = inventoryRepo.findByProductId(productId).orElse(null);
@@ -97,12 +113,18 @@ public void updateStock(String productId, int newQuantity) {
     inventoryRepo.save(inventory);
 }
 
+    /**
+     * Gets available stock quantity (total - reserved).
+     */
     public Integer getAvailableStock(String productId) {
         Inventory i = inventoryRepo.findByProductId(productId).orElse(null);
         if (i == null) return 0;
         return i.getQuantity() - i.getReservedQuantity();
     }
 
+    /**
+     * Retrieves stock status for multiple products.
+     */
     @Transactional
     public Map<String, Integer> getStockStatus(List<String> productIds) {
         List<Inventory> inventories = inventoryRepo.findByProductIdIn(productIds);

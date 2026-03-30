@@ -1,4 +1,3 @@
-// File: src/main/java/com/Lusficer/OrderService/service/OrderService.java
 package com.Lusficer.OrderService.service;
 
 import com.Lusficer.OrderService.client.InventoryClient;
@@ -27,6 +26,7 @@ import java.util.List;
 import java.util.UUID;
 import java.util.Map;
 import java.util.HashMap;
+
 @Service
 public class OrderService {
 
@@ -34,42 +34,35 @@ public class OrderService {
     @Autowired private OrderTrackingRepository trackingRepository;
     @Autowired private StatisticsClient statisticsClient;   
     @Autowired private InventoryClient inventoryClient;
-    @Autowired private VNPayService vnPayService; 
-    // --- LOGIC FOR USER ---
+    @Autowired private VNPayService vnPayService;
 
-    @Transactional(rollbackFor = Exception.class) // Đảm bảo rollback nếu lỗi kho
+    /**
+     * Places a new order with inventory reservation.
+     * Generates payment URL for VNPAY method.
+     * Orders over 2000 require manager verification.
+     */
+    @Transactional(rollbackFor = Exception.class)
     public Map<String, Object> placeOrder(PlaceOrderRequest request, HttpServletRequest httpRequest) {
         String orderId = "ORD-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
 
-        // 1. Calculate prices
         BigDecimal subTotal = BigDecimal.ZERO;
         List<OrderItem> items = new ArrayList<>();
         
-        // Create temporary Order object
         Order order = new Order();
         order.setOrderId(orderId);
 
-        // Duyệt qua từng sản phẩm để tính tiền VÀ giữ chỗ bên kho
         for (OrderItemRequest itemReq : request.getItems()) {
-            
-            // --- A. Gọi Inventory giữ hàng ---
             try {
-                // Tạo request giữ hàng
                 StockRequest stockReq = new StockRequest(orderId, itemReq.getProductId(), itemReq.getQuantity());
-                
-                // Gọi sang Inventory Service (Nếu hết hàng -> Feign ném lỗi 400/500 -> Catch ở dưới)
                 inventoryClient.reserveStock(stockReq);
                 
             } catch (FeignException e) {
-                // Phân tích lỗi từ Inventory trả về để báo cho User dễ hiểu hơn
                 System.err.println("Inventory Error: " + e.contentUTF8());
                 throw new InvalidOrderOperationException("Đặt hàng thất bại: Sản phẩm " + itemReq.getProductName() + " đã hết hàng hoặc không đủ số lượng.");
             } catch (Exception e) {
-                // Lỗi mạng hoặc lỗi hệ thống khác
                 throw new RuntimeException("Hệ thống kho đang bận, vui lòng thử lại sau.");
             }
 
-            // --- B. Tính toán giá cả (Logic cũ) ---
             BigDecimal lineTotal = itemReq.getUnitPrice().multiply(BigDecimal.valueOf(itemReq.getQuantity()));
             subTotal = subTotal.add(lineTotal);
 
@@ -84,7 +77,6 @@ public class OrderService {
                     .build());
         }
 
-        // [LOGIC CŨ GIỮ NGUYÊN] ...
         BigDecimal shippingFee = new BigDecimal("5"); 
         BigDecimal grandTotal = subTotal.add(shippingFee);
 
@@ -119,19 +111,21 @@ public class OrderService {
         Order savedOrder = orderRepository.save(order);
         createTrackingLog(savedOrder, "Order Created", "Waiting for seller confirmation", "PENDING", null, null);
 
-        // --- [MỚI] LOGIC VNPAY ---
         String paymentUrl = null;
         if ("VNPAY".equalsIgnoreCase(request.getPaymentMethod())) {
             paymentUrl = vnPayService.createPaymentUrl(savedOrder.getOrderId(), savedOrder.getGrandTotal(), httpRequest, savedOrder.getShopId());      
         }
 
-        // Trả kết quả về cho Controller
         Map<String, Object> response = new HashMap<>();
         response.put("orderId", savedOrder.getOrderId());
-        response.put("paymentUrl", paymentUrl); // Nếu COD thì cái này sẽ là null
+        response.put("paymentUrl", paymentUrl);
         return response;
     }
 
+    /**
+     * Processes VNPay payment callback.
+     * Updates order payment status and releases inventory on failure.
+     */
     @Transactional
     public String processVNPayReturn(Map<String, String> params) {
         String orderId = params.get("vnp_TxnRef");
@@ -144,25 +138,21 @@ public class OrderService {
 
         if (!isValid) {
             order.setPaymentStatus(PaymentStatus.FAILED);
-            order.setOrderStatus(OrderStatus.CANCELLED); // Hacker can thiệp -> Hủy đơn
+            order.setOrderStatus(OrderStatus.CANCELLED);
             orderRepository.save(order);
             return "signature_failed";
         }
 
         if ("00".equals(responseCode)) {
-            // [THANH TOÁN THÀNH CÔNG]
             order.setPaymentStatus(PaymentStatus.PAID); 
-            // orderStatus giữ nguyên (NEW hoặc PENDING_VERIFICATION) chờ xử lý tiếp
             orderRepository.save(order);
             createTrackingLog(order, "Payment Success", "Customer paid via VNPay successfully.", "PENDING", null, null);
             return "success";
         } else {
-            // [THANH TOÁN THẤT BẠI / KHÁCH HỦY]
             order.setPaymentStatus(PaymentStatus.FAILED);
-            order.setOrderStatus(OrderStatus.CANCELLED); // Hủy luôn đơn hàng
+            order.setOrderStatus(OrderStatus.CANCELLED);
             orderRepository.save(order);
             
-            // Gọi sang Inventory Service để nhả lại hàng vào kho
             try {
                 inventoryClient.releaseStock(orderId);
                 System.out.println("Stock released for unpaid order: " + orderId);
@@ -175,6 +165,10 @@ public class OrderService {
         }
     }
 
+    /**
+     * Cancels an order and releases reserved inventory.
+     * Only NEW or PENDING_VERIFICATION orders can be cancelled.
+     */
     public void cancelOrder(String orderId, String userId) {
         Order order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new ResourceNotFoundException("Order not found with ID: " + orderId)); 
@@ -190,8 +184,6 @@ public class OrderService {
         order.setOrderStatus(OrderStatus.CANCELLED);
         Order savedOrder = orderRepository.save(order);
 
-        // [NEW] LOGIC NHẢ HÀNG (RELEASE)
-        // Khi hủy đơn, phải báo kho nhả hàng ra ngay
         try {
             inventoryClient.releaseStock(orderId);
             System.out.println("Stock released for cancelled order: " + orderId);
@@ -203,6 +195,10 @@ public class OrderService {
         createTrackingLog(savedOrder, "Order Cancelled", "Buyer cancelled this order", existingShipmentId, null, null);
     }
 
+    /**
+     * Completes a delivered order and syncs statistics.
+     * Only DELIVERED orders can be completed by customer.
+     */
    public Order completeOrder(String orderId, String userId) {
         Order order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new ResourceNotFoundException("Order not found"));
@@ -243,8 +239,10 @@ public class OrderService {
         return savedOrder;
     }
 
-    // --- LOGIC FOR VENDOR ---
-
+    /**
+     * Updates order status by vendor.
+     * Generates shipment ID and tracking info for SHIPPING status.
+     */
     public Order updateOrderStatus(String orderId, UpdateStatusRequest request) {
         Order order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new ResourceNotFoundException("Order not found with ID: " + orderId)); // 404
@@ -259,11 +257,8 @@ public class OrderService {
         order.setOrderStatus(newStatus);
         Order savedOrder = orderRepository.save(order);
 
-        // === [LOGIC SHIPMENT] ===
-        // 1. Get existing ID
         String shipmentId = getExistingShipmentId(orderId);
         
-        // 2. If ID is placeholder "PENDING" AND new status is SHIPPING -> Generate real ID
         if ("PENDING".equals(shipmentId) && newStatus == OrderStatus.SHIPPING) {
             shipmentId = "SHP-" + UUID.randomUUID().toString().substring(0, 8);
         }
@@ -272,7 +267,6 @@ public class OrderService {
         String trackingNumber = null;
         String carrier = null;
 
-        // Simulate generating tracking info
         if (newStatus == OrderStatus.SHIPPING) {
             trackingNumber = "GHTK-" + System.currentTimeMillis();
             carrier = "Giao Hang Tiet Kiem";
@@ -283,8 +277,10 @@ public class OrderService {
         return savedOrder;
     }
 
-    // --- LOGIC FOR MANAGER ---
-
+    /**
+     * Verifies high-value order by manager.
+     * Approves or rejects orders in PENDING_VERIFICATION status.
+     */
     public Order verifyOrder(String orderId, VerifyOrderRequest request) {
         Order order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new ResourceNotFoundException("Order not found with ID: " + orderId)); // 404
@@ -309,13 +305,8 @@ public class OrderService {
         return orderRepository.save(order);
     }
 
-   
-    
-    // --- HELPER METHODS ---
-
     /**
-     * Helper to find the last valid Shipment ID from tracking history.
-     * Returns "PENDING" if no ID found.
+     * Retrieves last valid shipment ID from tracking history.
      */
     private String getExistingShipmentId(String orderId) {
         List<OrderTracking> logs = trackingRepository.findByOrder_OrderIdOrderByUpdatedAtDesc(orderId);
@@ -329,7 +320,7 @@ public class OrderService {
     }
     
     /**
-     * Helper to save a new row in OrderTracking table
+     * Creates tracking log entry for order status changes.
      */
     private void createTrackingLog(Order order, String displayStatus, String description, 
                                    String shipmentId, String trackingNumber, String carrierName) {

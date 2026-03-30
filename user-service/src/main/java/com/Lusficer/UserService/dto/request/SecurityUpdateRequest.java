@@ -1,9 +1,12 @@
-// user-service/src/main/java/com/Lusficer/UserService/dto/SecurityUpdateRequest.java
 package com.Lusficer.UserService.dto.request;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 
+/**
+ * Request DTO for updating user password.
+ * Requires current password for verification before updating to new password.
+ */
 public record SecurityUpdateRequest(
         @NotBlank(message = "Current password is required")
         String currentPassword,

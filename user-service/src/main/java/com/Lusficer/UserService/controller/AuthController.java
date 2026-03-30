@@ -1,4 +1,3 @@
-// user-service/src/main/java/com/Lusficer/UserService/controller/AuthController.java
 package com.Lusficer.UserService.controller;
 
 import com.Lusficer.UserService.config.JwtTokenProvider;
@@ -53,16 +52,22 @@ public class AuthController {
 
     private final Map<String, Bucket> cache = new ConcurrentHashMap<>();
 
+    /**
+     * Creates a rate limit bucket for login attempts.
+     * Allows 5 attempts per 15 minutes per IP address.
+     */
     private Bucket createNewBucket() {
         Bandwidth limit = Bandwidth.classic(5, Refill.greedy(5, Duration.ofMinutes(15)));
         return Bucket.builder().addLimit(limit).build();
     }
-    // ---------------------------------------------
 
+    /**
+     * Authenticates user and returns JWT token.
+     * Implements rate limiting: 5 attempts per 15 minutes per IP.
+     */
     @PostMapping("/login")
     @Operation(summary = "Login", description = "Login → returns JWT")
-    public ResponseEntity<?> login(@Valid @RequestBody LoginRequest req, HttpServletRequest request) { // Thêm HttpServletRequest
-        
+    public ResponseEntity<?> login(@Valid @RequestBody LoginRequest req, HttpServletRequest request) {
         String ip = request.getRemoteAddr();
         
         Bucket bucket = cache.computeIfAbsent(ip, k -> createNewBucket());
@@ -82,10 +87,14 @@ public class AuthController {
         return ResponseEntity.ok(new LoginResponse(jwt, user.getUserId()));
     }
 
+    /**
+     * Registers a new user with specified role.
+     * Auto-generates sequential userId based on role prefix.
+     * Creates associated auth, role, and status records.
+     */
     @PostMapping("/register")
     @Operation(summary = "Register user", description = "Create a user account and assign a role (selectable via dropdown)")
     public ResponseEntity<RegistrationResponse> register(@Valid @RequestBody RegisterRequest request) {
-       
         String userLabel;
         switch (request.role().name()) {
             case "ADMIN" -> userLabel = "ADMIN";
@@ -98,7 +107,6 @@ public class AuthController {
             default -> userLabel = "U";
         }
 
-        // Count existing users with this prefix and compute next sequence number
         long existing = profileRepo.countByUserIdStartingWith(userLabel + "_");
         int next = (int) existing + 1;
         String userId = String.format("%s_%03d", userLabel, next);

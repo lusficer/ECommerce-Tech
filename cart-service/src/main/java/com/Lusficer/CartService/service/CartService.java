@@ -23,11 +23,18 @@ public class CartService {
     @Autowired private ProductClient productClient;
     @Autowired private InventoryClient inventoryClient;
     
+    /**
+     * Retrieves cart for specified user.
+     */
     public CartResponse getMyCart(String userId) {
         Cart cart = getOrCreateCart(userId);
         return mapToResponse(cart);
     }
 
+    /**
+     * Adds product to cart with inventory validation.
+     * Updates quantity if product already exists in cart.
+     */
     @Transactional
     public CartResponse addToCart(String userId, AddToCartRequest req) {
         var product = productClient.getProductDetail(req.getProductId());
@@ -99,6 +106,10 @@ public class CartService {
         return mapToResponse(cart);
     }
 
+    /**
+     * Updates item quantity in cart.
+     * Removes item if quantity is zero or negative.
+     */
     @Transactional
     public CartResponse updateQuantity(String userId, Long itemId, Integer newQuantity) {
         Cart cart = getOrCreateCart(userId);
@@ -123,11 +134,17 @@ public class CartService {
         return mapToResponse(cart);
     }
     
+    /**
+     * Removes single item from cart.
+     */
     @Transactional
     public void removeItem(String userId, Long itemId) {
         updateQuantity(userId, itemId, 0);
     }
 
+    /**
+     * Clears all items from user's cart.
+     */
     @Transactional
     public void clearCart(String userId) {
         Cart cart = getOrCreateCart(userId);
@@ -139,6 +156,9 @@ public class CartService {
         cartRepo.save(cart);
     }
 
+    /**
+     * Removes multiple items from cart by item IDs.
+     */
     @Transactional
     public CartResponse removeItems(String userId, List<Long> itemIds) {
         Cart cart = getOrCreateCart(userId);

@@ -25,23 +25,15 @@ public class UserDetailsServiceImpl implements UserDetailsService {
     private final UserAuthRepository authRepo;
     private final UserRoleRepository roleRepo;
 
+    /**
+     * Loads user details for Spring Security authentication.
+     * Accepts both email (for login) and userId (for token auth).
+     * Returns UserDetails with userId as principal and assigned roles.
+     */
     @Override
     public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
-        // Algorithm for resolving UserDetails used by Spring Security:
-        // 1) Look up the user profile by email OR userId. The system accepts both:
-        //    - Email for initial login
-        //    - UserId for token-based authentication
-        // 2) Load the authentication record (password hash) by the resolved
-        //    userId (profile.getUserId()).
-        // 3) Load all roles for the user and map them to SimpleGrantedAuthority
-        //    with the "ROLE_" prefix required by Spring Security.
-        // 4) Return a Spring Security `User` where we store userId as the
-        //    username (so downstream code that calls Authentication#getName()
-        //    receives the internal userId rather than email). This decouples
-        //    external login identifier (email) from the internal principal id.
-
-        UserProfile profile = profileRepo.findById(username)  // Try userId first
-                .orElseGet(() -> profileRepo.findByEmail(username)  // Then try email
+        UserProfile profile = profileRepo.findById(username)
+                .orElseGet(() -> profileRepo.findByEmail(username)
                         .orElseThrow(() -> new UsernameNotFoundException("User not found: " + username)));
 
         UserAuth auth = authRepo.findByUserId(profile.getUserId())
@@ -52,7 +44,7 @@ public class UserDetailsServiceImpl implements UserDetailsService {
                 .collect(Collectors.toList());
 
         return User.builder()
-                .username(profile.getUserId())  // use internal userId as principal
+                .username(profile.getUserId())
                 .password(auth.getPasswordHash())
                 .authorities(authorities)
                 .build();

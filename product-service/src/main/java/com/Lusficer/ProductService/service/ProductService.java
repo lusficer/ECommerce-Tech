@@ -27,6 +27,10 @@ public class ProductService {
     @Autowired private ProductApprovalLogRepository logRepository;
     @Autowired private InventoryClient inventoryClient;
 
+    /**
+     * Creates new product with PENDING approval status.
+     * Initializes inventory if stock quantity provided.
+     */
     @Transactional
     public Product createProduct(String shopId, ProductRequestDTO request) {
         Product product = new Product();
@@ -46,6 +50,10 @@ public class ProductService {
         return product;
     }
 
+    /**
+     * Updates existing product.
+     * Resets approval to PENDING if sensitive fields changed.
+     */
     @Transactional
     public Product updateProduct(String productId, String shopId, ProductRequestDTO request) {
         Product existingProduct = productRepository.findById(productId)
@@ -81,6 +89,9 @@ public class ProductService {
         return existingProduct;
     }
 
+    /**
+     * Soft deletes product by setting isDeleted flag.
+     */
     @Transactional
     public void deleteProduct(String productId) {
         Product product = productRepository.findById(productId)
@@ -90,6 +101,9 @@ public class ProductService {
         productRepository.save(product);
     }
     
+    /**
+     * Retrieves all non-deleted products for a vendor with stock info.
+     */
     public List<Product> getVendorProducts(String shopId) {
         List<Product> products = productRepository.findByShopIdAndIsDeletedFalse(shopId);
 
@@ -115,7 +129,9 @@ public class ProductService {
         return products;
     }
 
-    
+    /**
+     * Gets products awaiting approval for a shop.
+     */
     public List<Product> getApprovalQueue(String shopId) {
         List<Product> products = productRepository.findByShopIdAndApprovalStatusOrderBySubmittedAtAsc(shopId, ApprovalStatus.PENDING);
         
@@ -143,6 +159,10 @@ public class ProductService {
                 .collect(Collectors.toList());
     }
 
+    /**
+     * Reviews product approval request.
+     * Approves with optional discount or rejects with reason.
+     */
     @Transactional
     public void reviewProduct(String productId, ApprovalReviewDTO reviewDTO) {
         Product product = productRepository.findById(productId)
@@ -174,53 +194,9 @@ public class ProductService {
         logRepository.save(log);
     }
 
-    public Product getProductById(String productId) {
-        return productRepository.findById(productId)
-                .orElseThrow(() -> new RuntimeException("Product not found with ID: " + productId));
-    }
-
-        public Map<String, String> getProductNamesBatch(List<String> ids) {
-        return productRepository.findByProductIdIn(ids)
-            .stream()
-            .collect(Collectors.toMap(
-                Product::getProductId,
-                Product::getName
-            ));
-    }
-
-
-
-    public ProductInternalDto getProductForInternal(String productId) {
-        Product product = productRepository.findById(productId)
-                .orElseThrow(() -> new RuntimeException("Product not found"));
-
-        int currentStock = 0;
-        try {
-            InventoryDto inventory = inventoryClient.getInventoryDetail(productId);
-            if (inventory != null && inventory.getAvailableQuantity() != null) {
-                currentStock = inventory.getAvailableQuantity();
-            }
-        } catch (Exception e) {
-            System.err.println("Error fetching inventory for product " + productId + ": " + e.getMessage());
-        }
-
-        return ProductInternalDto.builder()
-                .productId(product.getProductId())
-                .name(product.getName())
-                .description(product.getDescription())
-                .brand(product.getBrand())
-                .categoryId(product.getCategoryId())
-                .specifications(product.getSpecifications())
-                .mainImage(product.getImageUrl())
-                .discountPercentage(product.getDiscountPercentage())
-                .price(product.getPrice())
-                .averageRating(product.getAverageRating() != null ? product.getAverageRating() : 0.0)
-                .totalReviews(product.getTotalReviews() != null ? product.getTotalReviews() : 0)
-                .stock(currentStock)
-                .shopId(product.getShopId())
-                .build();
-    }
-
+    /**
+     * Updates product discount percentage and logs action.
+     */
     @Transactional
     public void updateProductDiscount(String productId, String shopId, int discountPercentage, String managerId) {
         Product product = productRepository.findById(productId)

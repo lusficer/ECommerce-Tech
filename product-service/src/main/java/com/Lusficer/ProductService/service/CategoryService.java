@@ -13,6 +13,9 @@ public class CategoryService {
     @Autowired
     private CategoryRepository categoryRepository;
 
+    /**
+     * Retrieves all active categories.
+     */
     public List<Category> getActiveCategories() {
         return categoryRepository.findByStatus("ACTIVE");
     }

@@ -14,17 +14,26 @@ public class WishlistService {
     
     private final WishlistRepository wishlistRepo;
 
+    /**
+     * Retrieves user's wishlist ordered by most recently added.
+     */
     public List<Wishlist> getMyWishlist(String userId) {
         return wishlistRepo.findByUserIdOrderByAddedAtDesc(userId);
     }
 
+    /**
+     * Checks if a product exists in user's wishlist.
+     */
     public boolean checkWishlist(String userId, String productId) {
         return wishlistRepo.existsByUserIdAndProductId(userId, productId);
     }
 
+    /**
+     * Toggles product in wishlist.
+     * Removes if already exists, adds if not present.
+     */
     @Transactional
     public void toggleWishlist(String userId, String productId) {
-        // If already liked, unlike; if not liked, add to wishlist
         wishlistRepo.findByUserIdAndProductId(userId, productId).ifPresentOrElse(
             wishlist -> wishlistRepo.delete(wishlist),
             () -> {

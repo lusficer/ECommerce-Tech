@@ -58,9 +58,9 @@ public class OrderService {
                 
             } catch (FeignException e) {
                 System.err.println("Inventory Error: " + e.contentUTF8());
-                throw new InvalidOrderOperationException("Đặt hàng thất bại: Sản phẩm " + itemReq.getProductName() + " đã hết hàng hoặc không đủ số lượng.");
+                throw new InvalidOrderOperationException("Order failed: Product " + itemReq.getProductName() + " is out of stock or insufficient quantity.");
             } catch (Exception e) {
-                throw new RuntimeException("Hệ thống kho đang bận, vui lòng thử lại sau.");
+                throw new RuntimeException("Inventory system is busy, please try again later.");
             }
 
             BigDecimal lineTotal = itemReq.getUnitPrice().multiply(BigDecimal.valueOf(itemReq.getQuantity()));

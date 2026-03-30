@@ -177,6 +177,9 @@ public class CartService {
     }
 
 
+    /**
+     * Retrieves existing cart for user or creates new empty cart.
+     */
     private Cart getOrCreateCart(String userId) {
         return cartRepo.findByUserId(userId)
                 .orElseGet(() -> {
@@ -187,6 +190,9 @@ public class CartService {
                 });
     }
 
+    /**
+     * Recalculates and updates cart total price based on all items.
+     */
     private void updateCartTotal(Cart cart) {
         BigDecimal total = cart.getItems().stream()
                 .map(CartItem::getSubTotal)
@@ -196,6 +202,9 @@ public class CartService {
         cartRepo.save(cart);
     }
 
+    /**
+     * Maps cart entity to response DTO with calculated totals.
+     */
     private CartResponse mapToResponse(Cart cart) {
         int totalItems = (cart.getItems() == null) ? 0 : 
                 cart.getItems().stream().mapToInt(CartItem::getQuantity).sum();
@@ -208,6 +217,9 @@ public class CartService {
                 .build();
     }
 
+    /**
+     * Maps cart item entity to response DTO.
+     */
     private CartItemResponse mapItemToResponse(CartItem item) {
         return CartItemResponse.builder()
                 .itemId(item.getItemId())

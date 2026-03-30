@@ -26,6 +26,11 @@ public class ReviewService {
     private final ProductReviewRepository reviewRepository;
     private final ProductRepository productRepository;
 
+    /**
+     * Adds review for a product with rating, comment and images.
+     * Prevents duplicate reviews for same order and product.
+     * Updates product average rating and total reviews after submission.
+     */
     @Transactional
     public ReviewResponseDTO addReview(String productId, String userId, ReviewRequestDTO request) {
         Product product = productRepository.findById(productId)
@@ -64,11 +69,17 @@ public class ReviewService {
         return mapToResponseDTO(savedReview);
     }
 
+    /**
+     * Retrieves all reviews for a product sorted by creation date.
+     */
     public List<ReviewResponseDTO> getProductReviews(String productId) {
         List<ProductReview> reviews = reviewRepository.findByProduct_ProductIdOrderByCreatedAtDesc(productId);
         return reviews.stream().map(this::mapToResponseDTO).collect(Collectors.toList());
     }
 
+    /**
+     * Maps review entity to response DTO with parsed image list.
+     */
     private ReviewResponseDTO mapToResponseDTO(ProductReview review) {
         List<String> imageList = new ArrayList<>();
         if (review.getImages() != null && !review.getImages().trim().isEmpty()) {

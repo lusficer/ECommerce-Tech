@@ -93,51 +93,47 @@ public class AccountManagementService {
      *   using a short prefix and 3-digit sequence (e.g. "V-001").
      */
     public UserRole manageAccountRole(String userId, String roleName) {
-    // Kiểm tra user có tồn tại
-    if (!userProfileRepository.existsById(userId)) {
-        throw new IllegalArgumentException("User ID " + userId + " does not exist in USER_PROFILE");
-    }
+        if (!userProfileRepository.existsById(userId)) {
+            throw new IllegalArgumentException("User ID " + userId + " does not exist in USER_PROFILE");
+        }
 
-    // Parse enum RoleName
-    RoleName parsedRole;
-    try {
-        parsedRole = RoleName.valueOf(roleName.toUpperCase());
-    } catch (IllegalArgumentException e) {
-        throw new IllegalArgumentException("Invalid role name: " + roleName);
-    }
+        RoleName parsedRole;
+        try {
+            parsedRole = RoleName.valueOf(roleName.toUpperCase());
+        } catch (IllegalArgumentException e) {
+            throw new IllegalArgumentException("Invalid role name: " + roleName);
+        }
 
-    Optional<UserRole> existingRole = userRoleRepository.findByUserId(userId);
+        Optional<UserRole> existingRole = userRoleRepository.findByUserId(userId);
 
-    UserRole role;
+        UserRole role;
         if (existingRole.isPresent()) {
-        // Nếu user đã có role → cập nhật role hiện tại
-        role = existingRole.get();
-        role.setRoleName(parsedRole);
-        role.setCreatedAt(LocalDateTime.now());
-    } else {
-        // Nếu chưa có → tạo role mới
-        String prefix = switch (parsedRole) {
-            case ADMIN -> "AD";
-            case CUSTOMER -> "C";
-            case SHOP_MANAGER -> "S";
-            case VENDOR -> "V";
-            case GUEST -> "G";
-            case WAREHOUSE_MANAGER -> "WM";
-            case SHIPPER ->  "SH"; 
-        };
+            role = existingRole.get();
+            role.setRoleName(parsedRole);
+            role.setCreatedAt(LocalDateTime.now());
+        } else {
+            String prefix = switch (parsedRole) {
+                case ADMIN -> "AD";
+                case CUSTOMER -> "C";
+                case SHOP_MANAGER -> "S";
+                case VENDOR -> "V";
+                case GUEST -> "G";
+                case WAREHOUSE_MANAGER -> "WM";
+                case SHIPPER ->  "SH"; 
+            };
 
-        long count = userRoleRepository.count() + 1;
-        String generatedRoleId = prefix + String.format("-%03d", count);
+            long count = userRoleRepository.count() + 1;
+            String generatedRoleId = prefix + String.format("-%03d", count);
 
-        role = new UserRole();
-        role.setRoleId(generatedRoleId);
-        role.setUserId(userId);
-        role.setRoleName(parsedRole);
-        role.setCreatedAt(LocalDateTime.now());
+            role = new UserRole();
+            role.setRoleId(generatedRoleId);
+            role.setUserId(userId);
+            role.setRoleName(parsedRole);
+            role.setCreatedAt(LocalDateTime.now());
+        }
+
+        return userRoleRepository.save(role);
     }
-
-    return userRoleRepository.save(role);
-}
 
 
     /**

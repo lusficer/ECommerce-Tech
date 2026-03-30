@@ -14,7 +14,7 @@ import com.Lusficer.OrderService.entity.Order;
 import java.util.List;
 @RestController
 @RequestMapping("/api/shipper/orders")
-@SecurityRequirement(name = "Bearer Token") // Bật khóa trên Swagger
+@SecurityRequirement(name = "Bearer Token") 
 @Tag(name = "Shipper Order", description = "Order operations for Shipper")
 @PreAuthorize("hasRole('ROLE_SHIPPER')")
 @RequiredArgsConstructor

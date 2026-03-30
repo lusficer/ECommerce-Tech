@@ -1,4 +1,3 @@
-// user-service/src/main/java/com/Lusficer/UserService/exception/BadRequestException.java
 package com.Lusficer.UserService.exception;
 
 import org.springframework.http.HttpStatus;

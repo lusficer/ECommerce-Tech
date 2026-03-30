@@ -28,8 +28,7 @@ public class ProductService {
     @Autowired private InventoryClient inventoryClient;
 
     /**
-     * Creates a new product for vendor with pending approval status.
-     * Initializes inventory if stock quantity provided.
+     * Creates a new product for a shop and submits it for approval.
      */
     @Transactional
     public Product createProduct(String shopId, ProductRequestDTO request) {
@@ -51,8 +50,7 @@ public class ProductService {
     }
 
     /**
-     * Updates product details. Resets approval status to PENDING
-     * if sensitive fields (name, image, description, category) are changed.
+     * Updates product details and re-submits for approval if sensitive fields changed.
      */
     @Transactional
     public Product updateProduct(String productId, String shopId, ProductRequestDTO request) {
@@ -79,6 +77,7 @@ public class ProductService {
             existingProduct.setSubmittedAt(LocalDateTime.now());
         } 
         
+
         existingProduct = productRepository.save(existingProduct);
 
         if (request.getStockQuantity() != null) {
@@ -89,7 +88,7 @@ public class ProductService {
     }
 
     /**
-     * Soft deletes product by setting isDeleted flag.
+     * Soft-deletes a product by marking it as deleted.
      */
     @Transactional
     public void deleteProduct(String productId) {
@@ -101,7 +100,7 @@ public class ProductService {
     }
     
     /**
-     * Retrieves vendor's products with current stock information.
+     * Returns vendor products with stock quantities from inventory.
      */
     public List<Product> getVendorProducts(String shopId) {
         List<Product> products = productRepository.findByShopIdAndIsDeletedFalse(shopId);
@@ -116,19 +115,21 @@ public class ProductService {
 
         try {
             Map<String, Integer> stockMap = inventoryClient.checkStockBatchPost(productIds);
+
             
             for (Product p : products) {
                 p.setStockQuantity(stockMap.getOrDefault(p.getProductId(), 0));
             }
         } catch (Exception e) {
-            System.err.println("Error calling InventoryService for stock: " + e.getMessage());
+            System.err.println("Failed to fetch inventory quantities: " + e.getMessage());
         }
 
         return products;
     }
 
+    
     /**
-     * Retrieves products pending approval for shop.
+     * Returns the approval queue for a shop with inventory quantities.
      */
     public List<Product> getApprovalQueue(String shopId) {
         List<Product> products = productRepository.findByShopIdAndApprovalStatusOrderBySubmittedAtAsc(shopId, ApprovalStatus.PENDING);
@@ -142,14 +143,14 @@ public class ProductService {
                 p.setStockQuantity(stockMap.getOrDefault(p.getProductId(), 0));
             }
         } catch (Exception e) {
-            System.err.println("Error calling Inventory for Approval Queue: " + e.getMessage());
+            System.err.println("Failed to fetch inventory for approval queue: " + e.getMessage());
         }
 
         return products;
     }
 
     /**
-     * Retrieves products by category with pagination (top 10, sorted by date).
+     * Returns products for a category for internal consumption.
      */
     public List<ProductInternalDto> getProductsByCategory(String categoryId) {
         org.springframework.data.domain.Pageable pageable = org.springframework.data.domain.PageRequest.of(0, 10, org.springframework.data.domain.Sort.by("submittedAt").descending());
@@ -161,8 +162,7 @@ public class ProductService {
     }
 
     /**
-     * Reviews product for approval or rejection by manager.
-     * Approved products can have discount applied.
+     * Reviews a product submission and records approval or rejection.
      */
     @Transactional
     public void reviewProduct(String productId, ApprovalReviewDTO reviewDTO) {
@@ -196,7 +196,7 @@ public class ProductService {
     }
 
     /**
-     * Retrieves product by ID.
+     * Returns a product by id.
      */
     public Product getProductById(String productId) {
         return productRepository.findById(productId)
@@ -204,7 +204,7 @@ public class ProductService {
     }
 
     /**
-     * Retrieves product names in batch for multiple product IDs.
+     * Returns product names by id in a batch.
      */
     public Map<String, String> getProductNamesBatch(List<String> ids) {
         return productRepository.findByProductIdIn(ids)
@@ -218,7 +218,7 @@ public class ProductService {
 
 
     /**
-     * Retrieves full product details with current inventory stock.
+     * Returns product details for internal consumers with inventory quantity.
      */
     public ProductInternalDto getProductForInternal(String productId) {
         Product product = productRepository.findById(productId)
@@ -252,7 +252,7 @@ public class ProductService {
     }
 
     /**
-     * Updates product discount percentage and logs the change.
+     * Updates product discount and writes an approval log entry.
      */
     @Transactional
     public void updateProductDiscount(String productId, String shopId, int discountPercentage, String managerId) {
@@ -277,8 +277,9 @@ public class ProductService {
 
     
 
+   
     /**
-     * Retrieves multiple products by IDs in batch.
+     * Returns a batch of products for internal usage.
      */
     public List<ProductInternalDto> getProductsBatch(List<String> ids) {
         List<Product> products = productRepository.findByProductIdIn(ids);
@@ -289,7 +290,7 @@ public class ProductService {
     }
 
     /**
-     * Retrieves all approved public products for a shop.
+     * Returns public, approved products for a shop.
      */
     public List<ProductInternalDto> getPublicProductsByShopId(String shopId) {
         List<Product> products = productRepository.findByShopIdAndApprovalStatusAndIsDeletedFalse(shopId, ApprovalStatus.APPROVED);
@@ -300,7 +301,7 @@ public class ProductService {
     }
 
     /**
-     * Retrieves top 10 trending products sorted by sold count.
+     * Returns trending products based on sold count.
      */
     public List<ProductInternalDto> getTrendingProducts() {
         List<Product> products = productRepository.findTop10ByApprovalStatusAndIsDeletedFalseOrderBySoldCountDesc(ApprovalStatus.APPROVED);
@@ -311,7 +312,7 @@ public class ProductService {
     }
 
     /**
-     * Searches products by keyword, returns top 5 approved results.
+     * Searches products by keyword for internal usage.
      */
     public List<ProductInternalDto> searchProductsInternal(String keyword) {
         List<Product> products = productRepository.findByNameContainingIgnoreCaseAndApprovalStatusAndIsDeletedFalse(keyword, ApprovalStatus.APPROVED);
@@ -319,14 +320,8 @@ public class ProductService {
             .limit(5)
             .map(this::mapToInternalDtoSimple)
             .collect(Collectors.toList());
-        }
+    }
 
-
-
-
-    /**
-     * Maps product request DTO to entity.
-     */
     private void mapDtoToEntity(ProductRequestDTO dto, Product entity) {
         entity.setName(dto.getName());
         entity.setPrice(dto.getPrice());
@@ -339,8 +334,7 @@ public class ProductService {
     }
 
     /**
-     * Filters products with multiple criteria and pagination.
-     * Supports sorting by price and discount.
+     * Filters products by search criteria and sorting for internal usage.
      */
     public Page<ProductInternalDto> filterProductsInternal(String keyword, String categoryId, String brand, Double minPrice, Double maxPrice, int page, int size, String sortOption) {
         BigDecimal min = minPrice != null ? BigDecimal.valueOf(minPrice) : null;
@@ -364,9 +358,6 @@ public class ProductService {
         return productPage.map(this::mapToInternalDtoSimple);
     }
 
-    /**
-     * Maps product entity to internal DTO without fetching inventory.
-     */
     private ProductInternalDto mapToInternalDtoSimple(Product p) {
         return ProductInternalDto.builder()
                 .productId(p.getProductId())

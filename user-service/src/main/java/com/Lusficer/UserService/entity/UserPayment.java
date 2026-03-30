@@ -1,6 +1,6 @@
 package com.Lusficer.UserService.entity;
 
-import java.time.LocalDateTime;  // THÊM
+import java.time.LocalDateTime;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;

@@ -19,37 +19,58 @@ public class InternalProductController {
     @Autowired
     private ProductService productService;
 
+    /**
+     * Returns product details for internal consumers.
+     */
     @GetMapping("/{id}")
     public ResponseEntity<ProductInternalDto> getProductDetail(@PathVariable("id") String id) {
         return ResponseEntity.ok(productService.getProductForInternal(id));
     }
 
+    /**
+     * Returns products by ID list for internal consumers.
+     */
     @GetMapping("/batch")
     public ResponseEntity<List<ProductInternalDto>> getProductsByIds(@RequestParam("ids") List<String> ids) {
         return ResponseEntity.ok(productService.getProductsBatch(ids));
     }
     
+    /**
+     * Returns product names by ID list for internal consumers.
+     */
     @PostMapping("/batch-names")
     @Operation(summary = "Batch fetch product names by list of IDs (POST body)")
     public ResponseEntity<Map<String, String>> getProductNames(@RequestBody List<String> ids) {
         return ResponseEntity.ok(productService.getProductNamesBatch(ids));
     }
 
+    /**
+     * Returns trending products based on sales.
+     */
     @GetMapping("/trending")
     public ResponseEntity<List<ProductInternalDto>> getTrendingProducts() {
         return ResponseEntity.ok(productService.getTrendingProducts());
     }
 
+    /**
+     * Searches products by keyword for internal consumers.
+     */
     @GetMapping("/search")
     public ResponseEntity<List<ProductInternalDto>> searchProducts(@RequestParam("keyword") String keyword) {
         return ResponseEntity.ok(productService.searchProductsInternal(keyword));
     }
 
+    /**
+     * Returns public products for a shop.
+     */
     @GetMapping("/shop/{shopId}")
     public ResponseEntity<List<ProductInternalDto>> getShopPublicProducts(@PathVariable("shopId") String shopId) {
         return ResponseEntity.ok(productService.getPublicProductsByShopId(shopId));
     }
 
+    /**
+     * Filters products by criteria for internal consumers.
+     */
     @GetMapping("/filter")
     public ResponseEntity<Page<ProductInternalDto>> filterProducts(
             @RequestParam(value = "keyword",    required = false) String keyword,

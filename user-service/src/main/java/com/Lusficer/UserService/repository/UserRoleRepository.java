@@ -8,10 +8,18 @@ import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface UserRoleRepository extends JpaRepository<UserRole, String> {
+    /**
+     * Finds the primary role for a user.
+     */
     Optional<UserRole> findByUserId(String userId);
 
-    // (Tùy bạn có thể muốn lấy nhiều role cho 1 user thì có thể dùng List)
+    /**
+     * Finds all roles assigned to a user.
+     */
     List<UserRole> findAllByUserId(String userId);
     
+    /**
+     * Deletes roles for a user.
+     */
     void deleteByUserId(String userId);
 }

@@ -48,7 +48,7 @@ public class Product {
 
     private Boolean isDeleted = false; // Soft delete 
 
-    // Add these inside your Product.java class
+    // Rating aggregates
     @Column(name = "averageRating", columnDefinition = "DECIMAL(3,2) DEFAULT 0.00")
     private Double averageRating = 0.0;
 

@@ -23,11 +23,17 @@ public class CategoryController {
     @Autowired
     private ProductService productService; 
 
+    /**
+     * Returns active categories.
+     */
     @GetMapping
     public ResponseEntity<List<Category>> getAllCategories() {
         return ResponseEntity.ok(categoryService.getActiveCategories());
     }
 
+    /**
+     * Returns products for a category.
+     */
     @GetMapping("/{categoryId}/products")
     public ResponseEntity<List<ProductInternalDto>> getProductsByCategory(@PathVariable("categoryId") String categoryId) {
         return ResponseEntity.ok(productService.getProductsByCategory(categoryId));

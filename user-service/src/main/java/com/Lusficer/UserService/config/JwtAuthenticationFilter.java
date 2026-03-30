@@ -1,4 +1,3 @@
-// user-service/src/main/java/com/Lusficer/UserService/config/JwtAuthenticationFilter.java
 package com.Lusficer.UserService.config;
 
 import jakarta.servlet.FilterChain;
@@ -24,6 +23,9 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     private final JwtTokenProvider jwtTokenProvider;
     private final UserDetailsService userDetailsService;
 
+    /**
+     * Extracts and validates JWT, then populates the security context.
+     */
     @Override
     protected void doFilterInternal(HttpServletRequest request,
                                     HttpServletResponse response,
@@ -31,16 +33,9 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
         String jwt = getJwtFromRequest(request);
 
-        // Typical JWT filter algorithm:
-        // 1. Extract token from Authorization header (Bearer).
-        // 2. Validate token signature and expiration via JwtTokenProvider.
-        // 3. If valid, extract subject (userId) and load UserDetails from DB.
-        // 4. Create an Authentication token and populate SecurityContext so
-        //    downstream code sees the user as authenticated.
         if (StringUtils.hasText(jwt) && jwtTokenProvider.validateToken(jwt)) {
             String userId = jwtTokenProvider.getUserIdFromJWT(jwt);
 
-            // Load user details (authorities) from persistent store
             UserDetails userDetails = userDetailsService.loadUserByUsername(userId);
             UsernamePasswordAuthenticationToken authentication =
                     new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities());
@@ -52,6 +47,9 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         filterChain.doFilter(request, response);
     }
 
+    /**
+     * Extracts a bearer token from the Authorization header.
+     */
     private String getJwtFromRequest(HttpServletRequest request) {
         String bearerToken = request.getHeader("Authorization");
         if (StringUtils.hasText(bearerToken) && bearerToken.startsWith("Bearer ")) {

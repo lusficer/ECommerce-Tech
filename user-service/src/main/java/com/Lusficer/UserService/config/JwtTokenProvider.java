@@ -1,7 +1,5 @@
 package com.Lusficer.UserService.config;
 
-// user-service/src/main/java/com/Lusficer/UserService/config/JwtTokenProvider.java
-
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.SignatureAlgorithm;
@@ -25,11 +23,17 @@ public class JwtTokenProvider {
     @Value("${jwt.expiration:86400000}") // 24h
     private long jwtExpirationMs;
 
+    /**
+     * Builds the signing key used for JWT operations.
+     */
     private SecretKey getSigningKey() {
         
         return Keys.hmacShaKeyFor(jwtSecret.getBytes());
     }
 
+    /**
+     * Generates a JWT token for the authenticated principal.
+     */
     public String generateToken(Authentication authentication) {
         UserDetails userDetails = (UserDetails) authentication.getPrincipal();
 
@@ -42,7 +46,7 @@ public class JwtTokenProvider {
 
     
     return Jwts.builder()
-        .setSubject(userDetails.getUsername()) // userId
+        .setSubject(userDetails.getUsername())
         .claim("roles", authorities)
         .setIssuedAt(now)
         .setExpiration(expiryDate)
@@ -50,6 +54,9 @@ public class JwtTokenProvider {
         .compact();
     }
 
+    /**
+     * Extracts the user ID from a JWT token.
+     */
     public String getUserIdFromJWT(String token) {
         Claims claims = Jwts.parserBuilder()
                 .setSigningKey(getSigningKey())
@@ -60,6 +67,9 @@ public class JwtTokenProvider {
         return claims.getSubject();
     }
 
+    /**
+     * Resolves user ID from the authentication principal.
+     */
     public String getUserIdFromAuth(Authentication auth) {
         if (auth == null || auth.getPrincipal() == null) return null;
         if (auth.getPrincipal() instanceof UserDetails userDetails) {
@@ -68,6 +78,9 @@ public class JwtTokenProvider {
         return auth.getName();
     }
 
+    /**
+     * Validates token signature and expiration.
+     */
     public boolean validateToken(String token) {
         try {
             Jwts.parserBuilder()

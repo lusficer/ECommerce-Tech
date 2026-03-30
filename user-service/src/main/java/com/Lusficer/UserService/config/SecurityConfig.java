@@ -1,4 +1,3 @@
-// user-service/src/main/java/com/Lusficer/UserService/config/SecurityConfig.java
 package com.Lusficer.UserService.config;
 
 import lombok.RequiredArgsConstructor;
@@ -19,17 +18,17 @@ public class SecurityConfig {
 
     private final JwtAuthenticationFilter jwtFilter;
 
+    /**
+     * Configures HTTP security and authentication filters.
+     */
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
-            // Disable CSRF
             .csrf(csrf -> csrf.disable())
             
-            // Disable Basic Auth popup
             .httpBasic(basic -> basic.disable())
             .formLogin(form -> form.disable())
             
-            // Use stateless session
             .sessionManagement(session -> 
                 session.sessionCreationPolicy(SessionCreationPolicy.STATELESS)
             )
@@ -46,10 +45,8 @@ public class SecurityConfig {
                 .anyRequest().authenticated()
             )
             
-            // Add JWT filter
             .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class)
             
-            // Exception handling
             .exceptionHandling(exception -> exception
                 .authenticationEntryPoint((request, response, authException) -> {
                     response.setStatus(401);
@@ -61,11 +58,17 @@ public class SecurityConfig {
         return http.build();
     }
 
+    /**
+     * Provides the password encoder used for hashing credentials.
+     */
     @Bean
     public PasswordEncoder passwordEncoder() {
         return new BCryptPasswordEncoder();
     }
 
+    /**
+     * Exposes the authentication manager bean.
+     */
     @Bean
     public AuthenticationManager authenticationManager(AuthenticationConfiguration config) throws Exception {
         return config.getAuthenticationManager();

@@ -22,28 +22,11 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
+/**
+ * Provides account management operations for profiles, roles, and deactivation.
+ */
 @Service
 public class AccountManagementService {
-
-    /**
-     * Class-level notes - AccountManagement algorithms
-     *
-     * - `viewAccountStatus` / `updateAccountDetails` are simple CRUD wrappers around
-     *   `UserProfileRepository`.
-     *
-     * - `manageAccountRole` implements a small role-management algorithm:
-     *   1. Validate the user exists.
-     *   2. Parse the incoming role name into the `RoleName` enum.
-     *   3. If a UserRole already exists for the user, update its `roleName` and
-     *      refresh `createdAt` timestamp.
-     *   4. If no role exists, generate a new `roleId` using a role-specific prefix
-     *      and a 3-digit counter derived from the total role count + 1 (e.g. "V-001").
-     *
-     *   This approach guarantees unique, human-readable role IDs but is not
-     *   collision-proof in highly concurrent environments (two instances generating
-     *   the same count simultaneously). For high concurrency consider using a DB
-     *   sequence or UUID instead of counting rows.
-     */
 
     @Autowired
     private UserProfileRepository userProfileRepository;
@@ -156,19 +139,16 @@ public class AccountManagementService {
      * User must provide a reason. Request goes to admin for approval.
      */
     public DeactivateAccountResponse requestDeactivation(String userId, DeactivateAccountRequest request) {
-        // Check if user exists
         if (!userProfileRepository.existsById(userId)) {
             throw new IllegalArgumentException("User ID " + userId + " does not exist");
         }
         
-        // Check if there is already a pending request for this user
         Optional<DeactivationRequest> existingRequest = deactivationRequestRepository
                 .findByUserIdAndStatus(userId, "PENDING");
         if (existingRequest.isPresent()) {
             throw new IllegalArgumentException("User already has a pending deactivation request");
         }
         
-        // Create new deactivation request
         DeactivationRequest deactivationRequest = DeactivationRequest.builder()
                 .userId(userId)
                 .reason(request.reason())
@@ -220,14 +200,12 @@ public class AccountManagementService {
         
         String userId = request.getUserId();
         
-        // Mark request as APPROVED
         request.setStatus("APPROVED");
         request.setApproverId(adminId);
         request.setApprovalDate(LocalDateTime.now());
         request.setApprovalReason(approvalReason);
         deactivationRequestRepository.save(request);
         
-        // Delete user account data (cascade through related tables)
         userProfileRepository.deleteById(userId);
         userStatusRepository.deleteById(userId);
         userRoleRepository.deleteByUserId(userId);
@@ -254,7 +232,6 @@ public class AccountManagementService {
             throw new IllegalArgumentException("Request is not in PENDING status");
         }
         
-        // Mark request as REJECTED
         request.setStatus("REJECTED");
         request.setApproverId(adminId);
         request.setApprovalDate(LocalDateTime.now());

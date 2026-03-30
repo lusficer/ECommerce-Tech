@@ -1,4 +1,3 @@
-// user-service/src/main/java/com/Lusficer/UserService/service/SecurityService.java
 package com.Lusficer.UserService.service;
 
 import com.Lusficer.UserService.dto.request.SecurityUpdateRequest;
@@ -17,28 +16,15 @@ import org.springframework.transaction.annotation.Transactional;
 public class SecurityService {
 
     /**
-     * Class-level notes - Security algorithms
-     *
-     * - Password change flow:
-     *   1. Load user by id.
-     *   2. Verify `currentPassword` using `PasswordEncoder#matches` (BCrypt).
-     *   3. If verification passes, encode the new password and set it on the user.
-     *
-     * - Two-Factor Authentication (2FA) flow:
-     *   - When enabling 2FA: generate a secret via `TwoFactorService.generateSecret()`,
-     *     persist it on the user and return a QR code URL derived from the secret.
-     *   - When disabling 2FA: simply clear the flag/secret.
-     *
-     * - Transactional behavior is expected (method annotated `@Transactional`).
-     *   Any failure should roll back the DB changes.
-     *
-     * - Errors are communicated via runtime exceptions (e.g. BadRequestException,
-     *   ResourceNotFoundException) so controllers can map them to HTTP error codes.
+     * Handles security-related account updates.
      */
 
     private final UserAuthRepository userAuthRepo;
     private final PasswordEncoder passwordEncoder;
 
+    /**
+     * Updates the user's password after validating the current password.
+     */
     @Transactional
     public SecurityUpdateResponse updateSecurity(String userId, SecurityUpdateRequest req) {
         UserAuth auth = userAuthRepo.findByUserId(userId)

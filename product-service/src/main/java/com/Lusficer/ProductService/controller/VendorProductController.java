@@ -89,6 +89,9 @@ public class VendorProductController {
         return ResponseEntity.ok(productService.getVendorProducts(shopId));
     }
 
+    /**
+     * Deletes a product as a vendor.
+     */
     @DeleteMapping("/{productId}")
     @PreAuthorize("hasAnyAuthority('ROLE_VENDOR','ROLE_SELLER')")
     public ResponseEntity<Void> deleteProductVendor(@PathVariable String productId) {

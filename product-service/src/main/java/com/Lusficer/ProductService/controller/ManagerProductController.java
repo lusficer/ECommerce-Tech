@@ -83,12 +83,18 @@ public class ManagerProductController {
         return ResponseEntity.ok("Product review submitted successfully");
     }
 
+    /**
+     * Returns products for the manager's shop.
+     */
     @GetMapping
     @PreAuthorize("hasAnyAuthority('ROLE_SHOP_MANAGER','ROLE_MANAGER')")
     public ResponseEntity<List<Product>> getShopProducts(@RequestHeader("SHOP-ID") String shopId) {
         return ResponseEntity.ok(productService.getVendorProducts(shopId)); 
     }
 
+    /**
+     * Deletes a product as a manager.
+     */
     @DeleteMapping("/{productId}")
     @PreAuthorize("hasAnyAuthority('ROLE_SHOP_MANAGER','ROLE_MANAGER')")
     public ResponseEntity<Void> deleteProductManager(@PathVariable("productId") String productId) {
@@ -96,6 +102,9 @@ public class ManagerProductController {
         return ResponseEntity.ok().build();
     }
 
+    /**
+     * Updates discount for a product in a manager context.
+     */
     @PutMapping("/{productId}/discount")
     @PreAuthorize("hasAnyAuthority('ROLE_SHOP_MANAGER','ROLE_MANAGER')")
     @Operation(

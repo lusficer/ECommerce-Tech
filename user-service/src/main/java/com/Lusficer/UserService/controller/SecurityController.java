@@ -21,6 +21,9 @@ public class SecurityController {
     private final SecurityService securityService;
     private final JwtTokenProvider jwtTokenProvider;
 
+    /**
+     * Updates account security settings for the authenticated user.
+     */
     @PutMapping("/security")
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<SecurityUpdateResponse> updateSecurity(

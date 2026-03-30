@@ -1,9 +1,7 @@
-// user-service/src/main/java/com/Lusficer/UserService/service/UserDetailsServiceImpl.java
 package com.Lusficer.UserService.service;
 
 import com.Lusficer.UserService.entity.UserAuth;
 import com.Lusficer.UserService.entity.UserProfile;
-import com.Lusficer.UserService.entity.UserRole;
 import com.Lusficer.UserService.repository.UserAuthRepository;
 import com.Lusficer.UserService.repository.UserProfileRepository;
 import com.Lusficer.UserService.repository.UserRoleRepository;
@@ -25,11 +23,9 @@ public class UserDetailsServiceImpl implements UserDetailsService {
     private final UserAuthRepository authRepo;
     private final UserRoleRepository roleRepo;
 
-    /**
-     * Loads user details for Spring Security authentication.
-     * Accepts both email (for login) and userId (for token auth).
-     * Returns UserDetails with userId as principal and assigned roles.
-     */
+        /**
+         * Loads user details for authentication by user ID or email.
+         */
     @Override
     public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
         UserProfile profile = profileRepo.findById(username)

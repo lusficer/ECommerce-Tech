@@ -1,4 +1,3 @@
-// File: src/main/java/com/Lusficer/StatisticsService/exception/UnauthorizedAccessException.java
 package com.Lusficer.InventoryService.exception;
 
 public class UnauthorizedAccessException extends RuntimeException {

@@ -25,7 +25,7 @@ public class StockForecastService {
     @Transactional
     public List<ForecastResultDto> trainAndPredict(boolean applyChanges, String shopId) {
 
-        // ─── STEP 1: Load inventory, filter by shop nếu có shopId ────────────
+        // ─── STEP 1: Load inventory, filter by shop if shopId is provided ───
         List<Inventory> products;
         if (shopId != null && !shopId.isBlank()) {
             Set<String> shopProductIds;

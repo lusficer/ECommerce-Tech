@@ -25,7 +25,9 @@ public class UserDisputeController {
     @Autowired
     private DisputeService disputeService;
 
-    // UC: List all disputes for a user
+    /**
+     * Lists all disputes created by the authenticated user.
+     */
     @GetMapping
     @PreAuthorize("hasRole('ROLE_CUSTOMER')")
     @Operation(summary = "List all disputes created by this user")
@@ -34,7 +36,9 @@ public class UserDisputeController {
         return ResponseEntity.ok(disputeService.getDisputesByUser(userId));
     }
 
-    // UC: Submit Order Dispute
+    /**
+     * Creates a new dispute for an order.
+     */
     @PostMapping
     public ResponseEntity<Dispute> createDispute(
             @RequestHeader("X-User-Id") String userId,
@@ -43,7 +47,9 @@ public class UserDisputeController {
         return ResponseEntity.ok(disputeService.createDispute(userId, shopId, request));
     }
 
-    // UC: Provide Evidence/Response
+    /**
+     * Adds evidence or a response to an existing dispute.
+     */
     @PostMapping("/{disputeId}/evidence")
     @PreAuthorize("hasRole('ROLE_CUSTOMER')")
     public ResponseEntity<String> addEvidence(
@@ -55,7 +61,9 @@ public class UserDisputeController {
         return ResponseEntity.ok("Evidence added successfully");
     }
 
-    // UC: View Dispute Status
+    /**
+     * Retrieves dispute details for the given dispute id.
+     */
     @GetMapping("/{disputeId}")
     @PreAuthorize("hasRole('ROLE_CUSTOMER')")
     public ResponseEntity<Dispute> getDispute(

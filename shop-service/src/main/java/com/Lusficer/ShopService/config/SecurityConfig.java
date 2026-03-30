@@ -1,4 +1,3 @@
-// shop-service/src/main/java/com/Lusficer/ShopService/config/SecurityConfig.java
 package com.Lusficer.ShopService.config;
 
 import lombok.RequiredArgsConstructor;
@@ -19,10 +18,12 @@ public class SecurityConfig {
 
     private final JwtAuthenticationFilter jwtFilter;
 
+    /**
+     * Configures stateless security, JWT filter, and endpoint authorization rules.
+     */
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
-            // Disable CSRF
             .csrf(csrf -> csrf.disable())
             
             .httpBasic(basic -> basic.disable())
@@ -50,10 +51,8 @@ public class SecurityConfig {
                 .anyRequest().authenticated()
             )
             
-            // Add JWT filter
             .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class)
             
-            // Exception handling
             .exceptionHandling(exception -> exception
                 .authenticationEntryPoint((request, response, authException) -> {
                     response.setStatus(401);
@@ -65,11 +64,17 @@ public class SecurityConfig {
         return http.build();
     }
 
+    /**
+     * Provides password encoding using BCrypt.
+     */
     @Bean
     public PasswordEncoder passwordEncoder() {
         return new BCryptPasswordEncoder();
     }
 
+    /**
+     * Exposes the authentication manager.
+     */
     @Bean
     public AuthenticationManager authenticationManager(AuthenticationConfiguration config) throws Exception {
         return config.getAuthenticationManager();

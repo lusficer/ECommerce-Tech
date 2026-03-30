@@ -16,8 +16,10 @@ public class StockCleanupScheduler {
     @Autowired private ReservationRepository reservationRepo;
     @Autowired private StockLogRepository logRepo; 
 
-    // Runs every 1 minute
-   @Scheduled(fixedRate = 60000)
+    /**
+     * Releases expired reservations and restores stock every minute.
+     */
+    @Scheduled(fixedRate = 60000)
     @Transactional
     public void releaseExpiredStock() {
         List<InventoryReservation> expiredList = reservationRepo.findByExpiryTimeBefore(LocalDateTime.now());
@@ -29,7 +31,7 @@ public class StockCleanupScheduler {
                 inventory.setReservedQuantity(inventory.getReservedQuantity() - res.getQuantity());
                 inventoryRepo.save(inventory);
                 
-                // [NEW] Log system auto cleanup
+                // Log system auto cleanup
                 StockLog log = StockLog.builder()
                         .productId(res.getProductId())
                         .orderId(res.getOrderId())

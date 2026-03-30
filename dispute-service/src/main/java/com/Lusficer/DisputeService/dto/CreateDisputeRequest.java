@@ -6,7 +6,7 @@ import java.util.List;
 @Data
 public class CreateDisputeRequest {
     private String orderId;
-    private String reason; // String map to Enum
+    private String reason; // String mapped to enum
     private String description;
     private List<EvidenceDTO> initialEvidence;
 }

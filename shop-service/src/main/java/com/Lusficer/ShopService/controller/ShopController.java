@@ -1,4 +1,3 @@
-// shop-service/src/main/java/com/Lusficer/ShopService/controller/ShopController.java
 package com.Lusficer.ShopService.controller;
 
 import com.Lusficer.ShopService.dto.*;
@@ -27,6 +26,9 @@ public class ShopController {
 
     private final ShopService shopService;
 
+    /**
+     * Lists all shops (admin only).
+     */
     @GetMapping
     @Operation(summary = "Get all shops", description = "Retrieve a list of all available shops")
     @PreAuthorize("hasRole('ADMIN')")
@@ -37,12 +39,18 @@ public class ShopController {
         return ResponseEntity.ok(shops);
     }
 
+    /**
+     * Retrieves a shop profile by id.
+     */
     @GetMapping("/{shopId}")
     @Operation(summary = "Get shop by ID", description = "Retrieve a specific shop profile for customers")
     public ResponseEntity<ShopProfileResponse> getShopById(@PathVariable("shopId") String shopId) {
         return ResponseEntity.ok(shopService.getShopById(shopId));
     }
 
+    /**
+     * Lists shops owned by a specific owner.
+     */
     @GetMapping("/owner/{ownerId}")
     @PreAuthorize("hasRole('ADMIN') or hasRole('SHOP_MANAGER')")
     @Operation(summary = "Get shops by owner", description = "Retrieve shops that belong to a specific owner/userId")
@@ -53,6 +61,9 @@ public class ShopController {
         return ResponseEntity.ok(shops);
     }
 
+    /**
+     * Deactivates a shop after confirmation.
+     */
     @DeleteMapping("/{shopId}")
     @PreAuthorize("hasRole('SHOP_MANAGER') and @shopService.isOwner(#shopId, authentication)")
     public ResponseEntity<DeactivateShopResponse> deactivateShop(
@@ -67,6 +78,9 @@ public class ShopController {
         return ResponseEntity.ok(response);
     }
 
+    /**
+     * Updates shop profile fields.
+     */
     @PutMapping("/{shopId}/profile")
     @PreAuthorize("hasRole('SHOP_MANAGER') and @shopService.isOwner(#shopId, authentication)")
     public ResponseEntity<ShopProfileResponse> updateProfile(
@@ -76,6 +90,10 @@ public class ShopController {
         ShopProfileResponse response = shopService.updateProfile(shopId, request);
         return ResponseEntity.ok(response);
     }
+
+    /**
+     * Creates a new shop (one per manager).
+     */
     @PostMapping
     @PreAuthorize("hasRole('SHOP_MANAGER')")
     @Operation(summary = "Create a new shop", description = "Creates a new shop. Strictly limited to 1 shop per manager.")
@@ -84,13 +102,16 @@ public class ShopController {
             @RequestBody @Valid UpdateShopProfileRequest request) {
         
         if (ownerId == null || ownerId.trim().isEmpty()) {
-            throw new IllegalArgumentException("ownerId không được để trống!");
+            throw new IllegalArgumentException("ownerId must not be empty.");
         }
 
         ShopProfileResponse response = shopService.createShop(request, ownerId);
         return ResponseEntity.ok(response);
     }
 
+    /**
+     * Assigns a vendor to a shop.
+     */
     @PostMapping("/{shopId}/vendors/{vendorId}")
     public ResponseEntity<String> assignVendorToShop(
             @PathVariable("shopId") String shopId, 
@@ -99,12 +120,18 @@ public class ShopController {
         return ResponseEntity.ok("Assigned vendor " + vendorId + " to shop " + shopId + " successfully.");
     }
 
+    /**
+     * Lists shops assigned to the vendor.
+     */
     @GetMapping("/my-assigned-shops")
     public ResponseEntity<List<Shop>> getMyAssignedShops(
             @RequestHeader("userId") String vendorId) {
         return ResponseEntity.ok(shopService.getShopsAssignedToVendor(vendorId));
     }
 
+    /**
+     * Checks if a vendor is assigned to a shop.
+     */
     @GetMapping("/{shopId}/check-vendor/{vendorId}")
     public ResponseEntity<Boolean> checkVendorAccess(
             @PathVariable("shopId") String shopId, 
@@ -113,7 +140,10 @@ public class ShopController {
         return ResponseEntity.ok(hasAccess);
     }
 
-   @GetMapping("/search")
+    /**
+     * Searches shops by keyword.
+     */
+    @GetMapping("/search")
     public ResponseEntity<List<Shop>> searchShops(@RequestParam("keyword") String keyword) {
         return ResponseEntity.ok(shopService.searchShops(keyword));
     }

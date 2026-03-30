@@ -11,18 +11,29 @@ import java.util.Optional;
 @Repository
 public interface DisputeRepository extends JpaRepository<Dispute, String> {
 
-    // Tìm tất cả tranh chấp của một User (UC: View Dispute Status)
+    /**
+     * Returns all disputes created by the given user.
+     */
     List<Dispute> findByUserId(String userId);
 
-    // Tìm tranh chấp theo mã đơn hàng (Để kiểm tra xem đơn hàng này đã có tranh chấp chưa)
+    /**
+     * Finds a dispute by order id to check if a dispute already exists.
+     */
     Optional<Dispute> findByOrderId(String orderId);
 
-    // Tìm tranh chấp theo trạng thái (Dùng cho Shop Manager lọc danh sách)
+    /**
+     * Returns disputes filtered by status.
+     */
     List<Dispute> findByStatus(DisputeStatus status);
 
-    // Tìm tranh chấp theo trạng thái và sắp xếp theo ngày tạo (Mới nhất lên đầu)
+    /**
+     * Returns disputes by status ordered by creation time descending.
+     */
     List<Dispute> findByStatusOrderByCreatedAtDesc(DisputeStatus status);
 
+    /**
+     * Returns disputes for a specific shop.
+     */
     List<Dispute> findByShopId(String shopId);
 
 }

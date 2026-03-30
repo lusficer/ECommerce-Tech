@@ -1,8 +1,8 @@
 package com.Lusficer.DisputeService.entity;
 public enum DisputeStatus {
-    PENDING,            // Vừa tạo
-    UNDER_REVIEW,       // Manager đang xem
-    WAITING_FOR_INFO,   // Manager yêu cầu thêm thông tin
-    RESOLVED_APPROVED,  // Chấp nhận khiếu nại
-    RESOLVED_REJECTED   // Từ chối khiếu nại
+    PENDING,            // Newly created
+    UNDER_REVIEW,       // Manager reviewing
+    WAITING_FOR_INFO,   // Manager requested more information
+    RESOLVED_APPROVED,  // Dispute approved
+    RESOLVED_REJECTED   // Dispute rejected
 }

@@ -9,6 +9,8 @@ import java.util.List;
 @Repository
 public interface DisputeEvidenceRepository extends JpaRepository<DisputeEvidence, Long> {
 
-    // Lấy danh sách bằng chứng của một vụ tranh chấp cụ thể
+    /**
+     * Returns all evidence attached to a specific dispute.
+     */
     List<DisputeEvidence> findByDisputeId(String disputeId);
 }

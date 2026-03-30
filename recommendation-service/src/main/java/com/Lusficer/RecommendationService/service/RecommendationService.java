@@ -24,10 +24,17 @@ public class RecommendationService {
     private final InventoryClient inventoryClient;
     private final ProductClient productClient;
 
+    /**
+     * Persists a user behavior event used for recommendation signals.
+     */
     public void trackBehavior(UserBehaviorLog log) {
         behaviorRepository.save(log);
     }
 
+    /**
+     * Builds a hybrid recommendation list using recent behavior, search intent,
+     * category affinity, and inventory availability.
+     */
     public RecommendationResponse getSmartRecommendations(String userId) {
         List<UserBehaviorLog> logs = behaviorRepository.findByUserIdAndCreatedAtAfter(
                 userId, LocalDateTime.now().minusDays(7));
@@ -38,6 +45,7 @@ public class RecommendationService {
         Map<String, Double> categoryScores = new HashMap<>();
 
         for (UserBehaviorLog log : logs) {
+            // Weight actions to build preference scores.
             double points = switch (log.getActionType()) {
                 case VIEW -> 1.0;
                 case SEARCH -> 1.5;
@@ -62,6 +70,7 @@ public class RecommendationService {
                 .map(Map.Entry::getKey)
                 .collect(Collectors.toList());
 
+        // Capture the most recent search intent for relevance.
         String lastSearchKeyword = logs.stream()
                 .filter(log -> log.getActionType() == ActionType.SEARCH && log.getSearchKeyword() != null)
                 .sorted(Comparator.comparing(UserBehaviorLog::getCreatedAt).reversed())
@@ -73,6 +82,7 @@ public class RecommendationService {
                 ? safeSearchProducts(lastSearchKeyword) 
                 : new ArrayList<>();
 
+        // Identify a favorite category to broaden recommendations.
         String favoriteCategory = categoryScores.entrySet().stream()
                 .max(Map.Entry.comparingByValue())
                 .filter(e -> e.getValue() > 0)
@@ -86,6 +96,7 @@ public class RecommendationService {
         Set<String> categoryProductIds = categoryProducts.stream()
                 .map(ProductDto::getProductId).collect(Collectors.toSet());
 
+        // Merge candidate sources while preserving priority order.
         Set<String> allProductIds = new LinkedHashSet<>(topInteractionIds);
         searchRelatedProducts.forEach(p -> allProductIds.add(p.getProductId()));
         categoryProducts.forEach(p -> allProductIds.add(p.getProductId()));
@@ -93,6 +104,7 @@ public class RecommendationService {
         if (allProductIds.isEmpty()) return getTrendingFallback(userId);
 
         List<String> finalIdList = new ArrayList<>(allProductIds);
+        // Hydrate product details and stock in batch.
         List<ProductDto> productsInfo = safeGetProducts(finalIdList);
         Map<String, Integer> stockStatus = safeCheckStock(finalIdList);
         Map<String, ProductDto> productMap = productsInfo.stream()
@@ -115,6 +127,7 @@ public class RecommendationService {
             double score = productScores.getOrDefault(pid, 0.0);
             
             if (score >= 4.0 && stock <= 3) {
+                // High interest + low stock goes into urgent list.
                 item.setBadge("ALMOST SOLD OUT");
                 item.setReason("Only " + stock + " left! You liked this!");
                 urgentList.add(item);
@@ -133,6 +146,7 @@ public class RecommendationService {
             }
         }
         
+        // Sort regular items by reason priority.
         regularList.sort(Comparator.comparingInt(p -> getPriorityRank(p.getReason())));
 
         if (urgentList.isEmpty() && regularList.isEmpty()) {
@@ -153,16 +167,25 @@ public class RecommendationService {
         return 4;
     }
 
+    /**
+     * Safely searches products by keyword.
+     */
     private List<ProductDto> safeSearchProducts(String keyword) {
         try { return productClient.searchProducts(keyword); } 
         catch (Exception e) { return Collections.emptyList(); }
     }
 
+    /**
+     * Safely loads products in a category.
+     */
     private List<ProductDto> safeGetCategoryProducts(String categoryId) {
         try { return productClient.getProductsByCategory(categoryId); } 
         catch (Exception e) { return Collections.emptyList(); }
     }
 
+    /**
+     * Fallback for cold-start users using trending products.
+     */
     private RecommendationResponse getTrendingFallback(String userId) {
         List<ProductDto> trending = safeGetTrending();
         List<RecommendationItemDto> items = trending.stream()
@@ -184,16 +207,25 @@ public class RecommendationService {
                 .build();
     }
     
+    /**
+     * Safely loads products by id list.
+     */
     private List<ProductDto> safeGetProducts(List<String> ids) {
         try { return productClient.getProductsByIds(ids); } 
         catch (Exception e) { return Collections.emptyList(); }
     }
 
+    /**
+     * Safely loads trending products.
+     */
     private List<ProductDto> safeGetTrending() {
         try { return productClient.getTrendingProducts(); } 
         catch (Exception e) { return Collections.emptyList(); }
     }
 
+    /**
+     * Safely checks stock for a batch of product ids.
+     */
     private Map<String, Integer> safeCheckStock(List<String> ids) {
         try { return inventoryClient.checkStockBatchPost(ids); } 
         catch (Exception e) { return new HashMap<>(); }

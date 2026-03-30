@@ -2,13 +2,17 @@ package com.Lusficer.InventoryService.repository;
 
 import com.Lusficer.InventoryService.entity.InventoryReservation;
 import org.springframework.data.jpa.repository.JpaRepository;
-import java.util.List; // <--- Remember to import List
+import java.util.List;
 
 public interface ReservationRepository extends JpaRepository<InventoryReservation, Long> {
     
-    // [FIX] Must return List<InventoryReservation>
+    /**
+     * Returns all reservations for an order.
+     */
     List<InventoryReservation> findByOrderId(String orderId);
     
-    // Find expired stock reservations
+    /**
+     * Returns reservations that have expired.
+     */
     List<InventoryReservation> findByExpiryTimeBefore(java.time.LocalDateTime now);
 }

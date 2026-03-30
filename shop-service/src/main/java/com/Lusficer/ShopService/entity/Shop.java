@@ -1,4 +1,3 @@
-// shop-service/src/main/java/com/Lusficer/ShopService/entity/Shop.java
 package com.Lusficer.ShopService.entity;
 
 import io.swagger.v3.oas.annotations.media.Schema;

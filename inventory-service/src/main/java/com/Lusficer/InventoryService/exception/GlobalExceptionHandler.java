@@ -1,4 +1,3 @@
-// File: src/main/java/com/Lusficer/OrderService/exception/GlobalExceptionHandler.java
 package com.Lusficer.InventoryService.exception;
 
 import org.springframework.http.HttpStatus;
@@ -13,32 +12,42 @@ import java.util.Map;
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
-    // 1. Xử lý lỗi 404 - Không tìm thấy
+    /**
+     * Handles missing resources and returns a 404 error response.
+     */
     @ExceptionHandler(ResourceNotFoundException.class)
     public ResponseEntity<Object> handleNotFound(ResourceNotFoundException ex) {
         return buildErrorResponse(HttpStatus.NOT_FOUND, ex.getMessage());
     }
 
-    // 2. Xử lý lỗi 400 - Logic sai (Ví dụ: Không thể hủy đơn)
+    /**
+     * Handles invalid operations and returns a 400 error response.
+     */
     @ExceptionHandler(InvalidOrderOperationException.class)
     public ResponseEntity<Object> handleInvalidOperation(InvalidOrderOperationException ex) {
         return buildErrorResponse(HttpStatus.BAD_REQUEST, ex.getMessage());
     }
 
-    // 3. Xử lý lỗi 403 - Không có quyền
+    /**
+     * Handles unauthorized access and returns a 403 error response.
+     */
     @ExceptionHandler(UnauthorizedAccessException.class)
     public ResponseEntity<Object> handleUnauthorized(UnauthorizedAccessException ex) {
         return buildErrorResponse(HttpStatus.FORBIDDEN, ex.getMessage());
     }
 
-    // 4. Xử lý các lỗi khác (500)
+    /**
+     * Handles unexpected errors and returns a 500 error response.
+     */
     @ExceptionHandler(Exception.class)
     public ResponseEntity<Object> handleGlobalException(Exception ex) {
-        ex.printStackTrace(); // In log để dev debug
+        ex.printStackTrace();
         return buildErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR, "An internal server error occurred.");
     }
 
-    // Hàm build JSON trả về
+    /**
+     * Builds a consistent JSON error response body.
+     */
     private ResponseEntity<Object> buildErrorResponse(HttpStatus status, String message) {
         Map<String, Object> body = new HashMap<>();
         body.put("timestamp", LocalDateTime.now());

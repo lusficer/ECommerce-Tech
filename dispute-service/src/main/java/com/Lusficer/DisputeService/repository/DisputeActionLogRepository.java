@@ -9,7 +9,8 @@ import java.util.List;
 @Repository
 public interface DisputeActionLogRepository extends JpaRepository<DisputeActionLog, Long> {
 
-    // Lấy lịch sử xử lý của một vụ tranh chấp, sắp xếp theo thời gian tăng dần (Cũ -> Mới)
-    // Để hiển thị timeline cho Vendor/Manager xem
+    /**
+     * Returns the dispute action history ordered by time ascending.
+     */
     List<DisputeActionLog> findByDisputeIdOrderByCreatedAtAsc(String disputeId);
 }

@@ -17,17 +17,20 @@ public class DisputeActionLog {
     private String disputeId;
 
     @Column(nullable = false)
-    private String actorId; // ID của người thực hiện hành động (Vendor hoặc Shop Manager)
+    private String actorId; // ID of the actor (vendor or shop manager)
 
     @Column(nullable = false)
-    private String action; // Ví dụ: "CREATE", "REQUEST_INFO", "RESOLVE", "PROVIDE_INFO"
+    private String action; // Example: "CREATE", "REQUEST_INFO", "RESOLVE", "PROVIDE_INFO"
 
     @Column(columnDefinition = "TEXT")
-    private String message; // Nội dung ghi chú hoặc tin nhắn kèm theo
+    private String message; // Notes or message associated with the action
 
     @Column(nullable = false)
     private LocalDateTime createdAt;
 
+    /**
+     * Sets the creation timestamp before persisting.
+     */
     @PrePersist
     protected void onCreate() {
         this.createdAt = LocalDateTime.now();

@@ -23,29 +23,39 @@ public class ManagerDisputeController {
     @Autowired
     private DisputeService disputeService;
 
-    // UC: List all disputes for a shop
+    /**
+     * Lists all disputes for a shop.
+     */
     @GetMapping
     public ResponseEntity<List<Dispute>> listShopDisputes(
             @RequestHeader("SHOP-ID") String shopId) {
         return ResponseEntity.ok(disputeService.getDisputesByShop(shopId));
     }
 
-    // UC: Review Order Dispute
+    /**
+     * Retrieves a dispute for manager review.
+     */
     @GetMapping("/{disputeId}")
     public ResponseEntity<Dispute> reviewDispute(@PathVariable("disputeId") String disputeId) {
         return ResponseEntity.ok(disputeService.getDisputeDetails(disputeId));
     }
 
-    // UC: Request Additional Information
+    /**
+     * Requests additional information from the customer or vendor.
+     * Expected payload: {"message": "..."}
+     */
     @PostMapping("/{disputeId}/request-info")
     public ResponseEntity<String> requestInfo(
             @RequestHeader("X-User-Id") String managerId,
             @PathVariable("disputeId") String disputeId,
-            @RequestBody Map<String, String> payload) { // payload: {"message": "..."}
+            @RequestBody Map<String, String> payload) {
         disputeService.requestAdditionalInfo(disputeId, managerId, payload.get("message"));
         return ResponseEntity.ok("Request sent to vendor");
     }
 
+    /**
+     * Resolves a dispute as approved or rejected.
+     */
     @PostMapping("/{disputeId}/resolve")
     public ResponseEntity<String> resolveDispute(
             @RequestHeader("X-User-Id") String managerId,

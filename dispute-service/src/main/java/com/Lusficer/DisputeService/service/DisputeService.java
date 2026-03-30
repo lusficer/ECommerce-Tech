@@ -131,6 +131,9 @@ public class DisputeService {
         logAction(disputeId, request.getManagerId(), "RESOLVE", "Dispute resolved as " + request.getResolutionType());
     }
 
+    /**
+     * Lists all disputes created by a user.
+     */
     public List<Dispute> getDisputesByUser(String userId) {
         return disputeRepository.findByUserId(userId);
     }
@@ -142,6 +145,9 @@ public class DisputeService {
         return disputeRepository.findByShopId(shopId);
     }
 
+    /**
+     * Records a dispute action in the audit log.
+     */
     private void logAction(String disputeId, String actorId, String action, String message) {
         DisputeActionLog log = new DisputeActionLog();
         log.setDisputeId(disputeId);

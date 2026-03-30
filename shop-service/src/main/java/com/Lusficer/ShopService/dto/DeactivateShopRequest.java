@@ -1,4 +1,3 @@
-// shop-service/src/main/java/com/Lusficer/ShopService/dto/DeactivateShopRequest.java
 package com.Lusficer.ShopService.dto;
 
 import jakarta.validation.constraints.AssertTrue;

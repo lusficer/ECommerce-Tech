@@ -48,7 +48,8 @@ public class CartService {
         }
 
         if (availableStock == null || availableStock < req.getQuantity()) {
-            throw new RuntimeException("Sản phẩm này chỉ còn " + (availableStock == null ? 0 : availableStock) + " cái, không đủ hàng!");
+            int remaining = (availableStock == null ? 0 : availableStock);
+            throw new RuntimeException("This product has only " + remaining + " left in stock.");
         }
 
         Cart cart = getOrCreateCart(userId);
@@ -67,9 +68,9 @@ public class CartService {
 
         if (item != null) {
             int totalNewQty = item.getQuantity() + req.getQuantity();
-            if (totalNewQty > availableStock) {
-                 throw new RuntimeException("Bạn đã có " + item.getQuantity() + " cái trong giỏ. Kho chỉ còn tổng cộng " + availableStock + " cái.");
-            }
+              if (totalNewQty > availableStock) {
+                  throw new RuntimeException("You already have " + item.getQuantity() + " in your cart. Stock has only " + availableStock + " total.");
+              }
             
             item.setQuantity(totalNewQty);
             item.setUnitPrice(salePrice); 

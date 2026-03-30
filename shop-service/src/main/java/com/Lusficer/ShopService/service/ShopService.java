@@ -1,4 +1,3 @@
-// shop-service/src/main/java/com/Lusficer/ShopService/service/ShopService.java
 package com.Lusficer.ShopService.service;
 
 import com.Lusficer.ShopService.dto.*;
@@ -25,10 +24,17 @@ public class ShopService {
 
     private final ShopRepository shopRepo;
     private final ShopVendorMappingRepository mappingRepo;
+
+    /**
+     * Returns all shops.
+     */
     public List<Shop> getAllShops() {
         return shopRepo.findAll();
     }
 
+    /**
+     * Returns a shop profile by shop id.
+     */
     public ShopProfileResponse getShopById(String shopId) {
         Shop shop = shopRepo.findById(shopId)
                 .orElseThrow(() -> new ResourceNotFoundException("Shop not found"));
@@ -44,10 +50,16 @@ public class ShopService {
                 .build();
     }
 
+    /**
+     * Returns shops owned by a specific user.
+     */
     public List<Shop> getShopsByOwner(String ownerId) {
         return shopRepo.findByOwnerId(ownerId);
     }
 
+    /**
+     * Searches shops by name or id keyword.
+     */
     public List<Shop> searchShops(String keyword) {
         if (keyword == null || keyword.trim().isEmpty()) {
             return List.of(); 
@@ -55,6 +67,9 @@ public class ShopService {
         return shopRepo.findByShopNameContainingIgnoreCaseOrShopIdContainingIgnoreCase(keyword, keyword);
     }
 
+    /**
+     * Deactivates a shop and sets a restore window.
+     */
     @Transactional
     public DeactivateShopResponse deactivateShop(String shopId, String reason) {
         Shop shop = shopRepo.findById(shopId)
@@ -82,6 +97,9 @@ public class ShopService {
                 .build();
     }
 
+    /**
+     * Assigns a vendor to a shop or reactivates an inactive mapping.
+     */
     @Transactional
     public void assignVendorToShop(String shopId, String vendorId) {
         if (!shopRepo.existsById(shopId)) {
@@ -107,6 +125,9 @@ public class ShopService {
         mappingRepo.save(newMapping);
     }
 
+    /**
+     * Returns shops assigned to a vendor.
+     */
     public List<Shop> getShopsAssignedToVendor(String vendorId) {
         List<String> assignedShopIds = mappingRepo.findByVendorIdAndStatus(vendorId, "ACTIVE")
                 .stream()
@@ -116,6 +137,9 @@ public class ShopService {
         return shopRepo.findAllById(assignedShopIds);
     }
 
+    /**
+     * Creates a new shop for the owner.
+     */
     @Transactional
     public ShopProfileResponse createShop(UpdateShopProfileRequest req, String ownerId) {
         List<Shop> existingShops = shopRepo.findByOwnerId(ownerId);
@@ -147,6 +171,9 @@ public class ShopService {
                 .build();
     }
 
+    /**
+     * Updates shop profile fields.
+     */
     @Transactional
     public ShopProfileResponse updateProfile(String shopId, UpdateShopProfileRequest req) {
         Shop shop = shopRepo.findById(shopId)
@@ -168,10 +195,16 @@ public class ShopService {
                 .build();
     }
 
+    /**
+     * Checks whether a vendor is active in a shop.
+     */
     public boolean checkVendorBelongsToShop(String shopId, String vendorId) {
         return mappingRepo.existsByShopIdAndVendorIdAndStatus(shopId, vendorId, "ACTIVE");
     }
 
+    /**
+     * Checks whether the authenticated user is the shop owner.
+     */
     public boolean isOwner(String shopId, Authentication auth) {
         String userId = ((UserDetails) auth.getPrincipal()).getUsername();
         return shopRepo.existsByShopIdAndOwnerId(shopId, userId);

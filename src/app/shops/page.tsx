@@ -4,25 +4,19 @@ import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Store, MapPin, ArrowRight, Loader2, Search, Filter } from 'lucide-react';
 
+import { apiGet } from '@/lib/api';
+
 export default function AllShopsPage() {
   const [shops, setShops] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
 
   useEffect(() => {
-      const token = localStorage.getItem('accessToken') || localStorage.getItem('token');
-  
       const fetchShops = async () => {
         setLoading(true);
         try {
-          const response = await fetch('http://localhost:8082/api/shops', {
-          method: 'GET',
-          headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }
-        }); 
-          if (response.ok) {
-            const data = await response.json();
-            setShops(data);
-          }
+          const data = await apiGet<any[]>('shop', '/api/shops', { withAuth: false, withUserId: false });
+          setShops(data ?? []);
         } catch (error) {
           console.error("Error fetching shops:", error);
         } finally {

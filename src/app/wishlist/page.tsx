@@ -5,6 +5,8 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Trash2, ShoppingCart, ChevronRight, HeartCrack, Loader2, Heart } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { apiGet, apiPost, getUserFacingErrorMessage, isApiError } from '@/lib/api';
+import { getAuth, logout } from '@/lib/auth';
 
 interface WishlistItem {
   productId: string;
@@ -13,7 +15,8 @@ interface WishlistItem {
   mainImage: string;
   discountPercentage: number;
   stock: number;
-  addedAt: string; 
+  addedAt: string;
+  categoryId?: string;
 }
 
 export default function WishlistPage() {
@@ -22,58 +25,58 @@ export default function WishlistPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const token = localStorage.getItem('accessToken') || localStorage.getItem('token');
-    const userId = localStorage.getItem('userId');
-    if (!token) {
-      toast.error("Please log in to view your wishlist!");
+    const { token, userId } = getAuth();
+    if (!token || !userId) {
+      toast.error('Please sign in to view your wishlist.');
       router.push('/login?redirect=/wishlist');
       return;
     }
 
     const fetchWishlist = async () => {
       try {
-        const wishlistRes = await fetch(`http://localhost:8081/api/wishlists/${userId}`, {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          }
-        });
+        const wishlistData = await apiGet<any[]>(
+          'user',
+          `/api/wishlists/${userId}`,
+          { withUserId: false }
+        );
 
-        if (wishlistRes.status === 401 || wishlistRes.status === 403) {
-          localStorage.removeItem('accessToken');
-          toast.error("Login session expired!");
-          router.push('/login?redirect=/wishlist');
+        if (!wishlistData || wishlistData.length === 0) {
+          setItems([]);
+          setLoading(false);
           return;
         }
 
-        if (wishlistRes.ok) {
-          const wishlistData = await wishlistRes.json(); 
-          
-          if (wishlistData.length === 0) {
-            setItems([]);
-            setLoading(false);
-            return;
-          }
-
-          const productPromises = wishlistData.map(async (item: any) => {
-            const prodRes = await fetch(`http://localhost:8083/api/internal/products/${item.productId}`);
-            if (prodRes.ok) {
-              const prodData = await prodRes.json();
-              return {
-                ...prodData,
-                addedAt: item.addedAt 
-              };
-            }
+        const productPromises = wishlistData.map(async (item: any) => {
+          try {
+            const prodData = await apiGet<any>(
+              'product',
+              `/api/internal/products/${item.productId}`,
+              { withAuth: false, withUserId: false }
+            );
+            return {
+              ...prodData,
+              addedAt: item.addedAt,
+            };
+          } catch {
             return null;
-          });
+          }
+        });
 
-          const products = await Promise.all(productPromises);
-          
-          setItems(products.filter(p => p !== null));
-        }
+        const products = await Promise.all(productPromises);
+        setItems(products.filter((p) => p !== null));
       } catch (error) {
-        console.error("Error loading Wishlist:", error);
-        toast.error("Unable to load wishlist at this moment.");
+        if (isApiError(error) && (error.status === 401 || error.status === 403)) {
+          logout();
+          toast.error('Your session has expired. Please sign in again.');
+          router.push('/login?redirect=/wishlist');
+          return;
+        }
+        console.error('Error loading Wishlist:', error);
+        toast.error(
+          getUserFacingErrorMessage(error, {
+            defaultMessage: 'Unable to load wishlist right now.',
+          })
+        );
       } finally {
         setLoading(false);
       }
@@ -83,70 +86,60 @@ export default function WishlistPage() {
   }, [router]);
 
   const handleRemoveItem = async (productId: string) => {
-    const token = localStorage.getItem('accessToken') || localStorage.getItem('token');
-    const userId = localStorage.getItem('userId');
+    const { token, userId } = getAuth();
 
     try {
-      const res = await fetch(`http://localhost:8081/api/wishlists/${userId}/${productId}`, {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
+      await apiPost(
+        'user',
+        `/api/wishlists/${userId}/${productId}`,
+        undefined,
+        { withUserId: false }
+      );
+      setItems(prev => prev.filter(item => item.productId !== productId));
+      toast.success('Removed from wishlist!');
 
-      if (res.ok) {
-        setItems(prev => prev.filter(item => item.productId !== productId));
-        toast.success("Removed from wishlist!");
-        
-        window.dispatchEvent(new Event('wishlistUpdated'));
-      }
+      window.dispatchEvent(new Event('wishlistUpdated'));
     } catch (error) {
-      toast.error("An error occurred while removing!");
+      toast.error(
+        getUserFacingErrorMessage(error, {
+          defaultMessage: 'Failed to remove item from wishlist.',
+        })
+      );
     }
   };
 
   const handleAddToCart = async (productId: string) => {
-    const token = localStorage.getItem('accessToken') || localStorage.getItem('token');
-    const userId = localStorage.getItem('userId');
+    const { token, userId } = getAuth();
 
     if (!token || !userId) {
-      toast.error("Please login to add to cart!");
+      toast.error('Please sign in to add items to your cart.');
       return;
     }
 
     try {
-      const res = await fetch(`http://localhost:8088/api/cart/add`, {
-        method: 'POST',
-        headers: { 
-          'Authorization': `Bearer ${token}`, 
-          'Content-Type': 'application/json',
-          'userId': userId
-        },
-        body: JSON.stringify({ 
-          productId: productId,
-          quantity: 1 
-        })
-      });
-
-      if (!res.ok) {
-        const errorText = await res.text();
-        toast.error(errorText || "Error adding to cart!");
-        return;
-      }
-
-      toast.success("Added to cart!");
+      await apiPost('cart', '/api/cart/add', { productId, quantity: 1 });
+      toast.success('Added to cart!');
       
       window.dispatchEvent(new Event('cartUpdated'));
 
-      fetch(`http://localhost:8090/api/recommendations/track`, {
-         method: 'POST',
-         headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-         body: JSON.stringify({ 
-           productId: productId, 
-           actionType: 'ADD_TO_CART' 
-         })
-      }).catch(() => {});
+      const product = items.find((item: WishlistItem) => item.productId === productId);
+      apiPost(
+        'recommendation',
+        '/api/recommendations/track',
+        {
+          productId,
+          categoryId: product?.categoryId,
+          actionType: 'ADD_TO_CART',
+        },
+        { withUserId: false }
+      ).catch(() => {});
 
     } catch (err) {
-      toast.error("Unable to connect to the cart server.");
+      toast.error(
+        getUserFacingErrorMessage(err, {
+          defaultMessage: 'Failed to add to cart.',
+        })
+      );
     }
   };
 

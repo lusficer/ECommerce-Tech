@@ -11,9 +11,10 @@ interface DisputeStatusProps {
 export default function DisputeStatus({ status }: DisputeStatusProps) {
   if (!status) return null;
 
-  const normalized = normalizeDisputeStatus(status);
+  const raw = String(status);
+  const normalized = normalizeDisputeStatus(raw);
   if (!normalized) return null;
-  const rawStatus = status.toUpperCase();
+  const rawStatus = raw.toUpperCase();
 
   const classes =
     rawStatus === 'UNDER_REVIEW'
@@ -30,7 +31,7 @@ export default function DisputeStatus({ status }: DisputeStatusProps) {
     <span
       className={`inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-black border uppercase tracking-wide ${classes}`}
     >
-      {getDisputeLabel(normalized)}
+      {getDisputeLabel(raw)}
     </span>
   );
 }

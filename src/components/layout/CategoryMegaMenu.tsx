@@ -1,4 +1,3 @@
-// ===== src/components/layout/CategoryMegaMenu.tsx =====
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
@@ -6,32 +5,31 @@ import Link from 'next/link';
 import { Menu, ChevronDown, ChevronRight } from 'lucide-react';
 import { CATEGORY_META, DEFAULT_META } from './categoryMeta';
 
+import { apiGet } from '@/lib/api';
+
 export default function CategoryMegaMenu() {
   const [show, setShow]                     = useState(false);
   const [categories, setCategories]         = useState<any[]>([]);
   const [activeCategoryId, setActiveId]     = useState('');
   const ref = useRef<HTMLDivElement>(null);
 
-  // Load categories once
+  // Categories are fetched once and cached in state.
   useEffect(() => {
     (async () => {
       try {
-        const res = await fetch('http://localhost:8083/api/categories');
-        if (res.ok) {
-          const data = await res.json();
-          const merged = data.map((cat: any) => ({
-            id: cat.categoryId,
-            name: cat.name,
-            ...(CATEGORY_META[cat.categoryId] || DEFAULT_META),
-          }));
-          setCategories(merged);
-          if (merged.length > 0) setActiveId(merged[0].id);
-        }
+        const data = await apiGet<any[]>('product', '/api/categories', { withUserId: false });
+        const merged = (data ?? []).map((cat: any) => ({
+          id: cat.categoryId,
+          name: cat.name,
+          ...(CATEGORY_META[cat.categoryId] || DEFAULT_META),
+        }));
+        setCategories(merged);
+        if (merged.length > 0) setActiveId(merged[0].id);
       } catch {}
     })();
   }, []);
 
-  // Close on outside click
+  // Close the menu when clicking outside.
   useEffect(() => {
     const handler = (e: MouseEvent) => {
       if (ref.current && !ref.current.contains(e.target as Node)) setShow(false);
@@ -55,7 +53,6 @@ export default function CategoryMegaMenu() {
 
       {show && categories.length > 0 && activeCat && (
         <div className="absolute top-full left-0 w-[960px] bg-white border border-slate-200 shadow-2xl rounded-b-xl overflow-hidden z-50 flex animate-in fade-in slide-in-from-top-2 duration-200">
-          {/* Left: category list */}
           <div className="w-1/3 bg-slate-50 border-r border-slate-100 min-h-[450px] max-h-[550px] overflow-y-auto">
             <ul className="flex flex-col py-4">
               {categories.map((cat) => {
@@ -81,7 +78,6 @@ export default function CategoryMegaMenu() {
             </ul>
           </div>
 
-          {/* Right: brands + price ranges */}
           <div className="w-2/3 p-8 bg-white min-h-[450px] max-h-[550px] overflow-y-auto">
             <div className="flex items-center justify-between mb-8 pb-4 border-b border-slate-100">
               <h3 className="text-xl font-black text-slate-900 flex items-center gap-2">

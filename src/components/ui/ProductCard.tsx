@@ -1,5 +1,4 @@
-// ===== src/components/ui/ProductCard.tsx =====
-// Reusable product card used across best-sellers, new-releases, flash-sale,
+// Reusable product card used across listing pages
 // products listing, wishlist, and shop profile pages.
 
 'use client';
@@ -20,17 +19,17 @@ export interface ProductCardProps {
   isWishlisted?: boolean;
   isAddingToCart?: boolean;
 
-  /** Called when the wishlist heart is clicked */
+  // Called when the wishlist heart is clicked.
   onWishlistToggle?: (e: React.MouseEvent, productId: string) => void;
-  /** Called when the add-to-cart button is clicked */
+  // Called when the add-to-cart button is clicked.
   onAddToCart?: (e: React.MouseEvent, productId: string) => void;
 
-  /** Accent colour class for hover border / price, default: 'cyan' */
+  // Accent colour for hover border / price.
   accentColor?: 'cyan' | 'blue' | 'red' | 'orange';
 
-  /** Optional label badge (e.g. "NEW", "SALE") */
+  // Optional label badge (e.g. "NEW", "SALE").
   badge?: string;
-  /** Badge bg colour class, e.g. "bg-red-500" */
+  // Badge background class (e.g. "bg-red-500").
   badgeColor?: string;
 }
 
@@ -66,7 +65,6 @@ export default function ProductCard({
       href={`/products/${productId}`}
       className={`group relative flex flex-col bg-white p-4 rounded-2xl shadow-sm border border-slate-200 hover:shadow-xl transition-all duration-300 ${accent.border}`}
     >
-      {/* Top badges row */}
       <div className="absolute top-4 left-4 right-4 flex justify-between items-start z-10 pointer-events-none">
         {badge ? (
           <span className={`${badgeColor} text-white text-[11px] font-black px-3 py-1.5 rounded-br-xl rounded-tl-lg uppercase tracking-wide shadow-md`}>
@@ -78,7 +76,7 @@ export default function ProductCard({
             <span className="text-sm mt-0.5">{discountPercentage}%</span>
           </span>
         ) : (
-          <span /> // placeholder to keep justify-between
+          <span /> // Keep spacing consistent when no badge is shown.
         )}
 
         {onWishlistToggle && (
@@ -95,7 +93,6 @@ export default function ProductCard({
         )}
       </div>
 
-      {/* Product image */}
       <div className="w-full aspect-square bg-slate-50 rounded-xl mb-4 flex items-center justify-center overflow-hidden">
         <img
           src={imageUrl}
@@ -104,12 +101,10 @@ export default function ProductCard({
         />
       </div>
 
-      {/* Product name */}
       <h3 className={`font-bold text-slate-900 mb-2 leading-snug group-hover:${accent.price} transition-colors line-clamp-2 h-10 text-sm`}>
         {name}
       </h3>
 
-      {/* Price */}
       <div className="flex flex-col gap-0.5 mb-3">
         <span className={`text-xl font-black ${accent.price}`}>
           {formatCurrency(salePrice)}
@@ -123,7 +118,6 @@ export default function ProductCard({
 
       <div className="flex-grow" />
 
-      {/* Footer: stock status + cart button */}
       <div className="mt-2 pt-3 border-t border-slate-100 flex items-center justify-between">
         <div className="flex items-center gap-1.5">
           {isOutOfStock ? (

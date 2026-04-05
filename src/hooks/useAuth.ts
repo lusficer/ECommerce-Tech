@@ -1,4 +1,3 @@
-// ===== src/hooks/useAuth.ts =====
 // SSR-safe hook that exposes auth data after the component mounts on the client
 
 'use client';
@@ -14,11 +13,7 @@ export interface UseAuthReturn {
   logout: () => void;
 }
 
-/**
- * SSR-safe hook to read auth data from localStorage.
- * Always returns empty/false values during SSR and on the first render.
- * Values are populated after hydration (isMounted === true).
- */
+// Avoids hydration mismatches by reading localStorage only after mount.
 export function useAuth(): UseAuthReturn {
   const [isMounted, setIsMounted] = useState(false);
   const [token, setToken] = useState('');
@@ -45,3 +40,4 @@ export function useAuth(): UseAuthReturn {
     logout,
   };
 }
+

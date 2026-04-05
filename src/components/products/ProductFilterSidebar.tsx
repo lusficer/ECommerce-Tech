@@ -1,4 +1,3 @@
-// ===== src/components/products/ProductFilterSidebar.tsx =====
 'use client';
 
 import React from 'react';
@@ -35,13 +34,11 @@ export default function ProductFilterSidebar({
   return (
     <div className="w-full lg:w-1/4 flex flex-col gap-6 sticky top-28">
       <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-sm">
-        {/* Header */}
         <div className="flex items-center gap-2 mb-6 pb-4 border-b border-slate-100">
           <Filter className="w-5 h-5 text-slate-900" />
           <h3 className="text-lg font-black text-slate-900">Filters</h3>
         </div>
 
-        {/* Categories */}
         <div className="mb-6">
           <h4 className="font-bold text-slate-900 mb-3">Categories</h4>
           {loadingCategories ? (
@@ -73,7 +70,6 @@ export default function ProductFilterSidebar({
           )}
         </div>
 
-        {/* Brand */}
         <div className="mb-6">
           <h4 className="font-bold text-slate-900 mb-3">Brand</h4>
           <input
@@ -85,7 +81,6 @@ export default function ProductFilterSidebar({
           />
         </div>
 
-        {/* Price range */}
         <div>
           <h4 className="font-bold text-slate-900 mb-3">Price Range ($)</h4>
           <div className="flex items-center gap-2">

@@ -1,11 +1,11 @@
-// ===== src/components/layout/SearchBar.tsx =====
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Search, Loader2 } from 'lucide-react';
-import { getAuth } from '@/lib/auth';
+
+import { apiGet, apiPost } from '@/lib/api';
 
 const FALLBACK = 'https://placehold.co/100x100/f8fafc/94a3b8?text=Img';
 
@@ -17,7 +17,7 @@ export default function SearchBar() {
   const [showDropdown, setShowDropdown] = useState(false);
   const formRef = useRef<HTMLFormElement>(null);
 
-  // Debounced search
+  // Debounce search to avoid spamming the API while typing.
   useEffect(() => {
     const t = setTimeout(() => {
       if (input.trim().length >= 2) fetchResults(input.trim());
@@ -26,7 +26,7 @@ export default function SearchBar() {
     return () => clearTimeout(t);
   }, [input]);
 
-  // Close on outside click
+  // Close the dropdown when clicking outside.
   useEffect(() => {
     const handler = (e: MouseEvent) => {
       if (formRef.current && !formRef.current.contains(e.target as Node))
@@ -39,10 +39,13 @@ export default function SearchBar() {
   const fetchResults = async (keyword: string) => {
     setSearching(true);
     try {
-      const res = await fetch(
-        `http://localhost:8083/api/internal/products/search?keyword=${encodeURIComponent(keyword)}`
+      const data = await apiGet<any[]>(
+        'product',
+        `/api/internal/products/search?keyword=${encodeURIComponent(keyword)}`,
+        { withUserId: false }
       );
-      if (res.ok) { setResults(await res.json()); setShowDropdown(true); }
+      setResults(data ?? []);
+      setShowDropdown(true);
     } catch {} finally { setSearching(false); }
   };
 
@@ -53,15 +56,13 @@ export default function SearchBar() {
     setShowDropdown(false);
     router.push(`/products?keyword=${encodeURIComponent(kw)}`);
 
-    // Fire-and-forget tracking
-    const { token } = getAuth();
-    if (token) {
-      fetch('http://localhost:8090/api/recommendations/track', {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ actionType: 'SEARCH', searchKeyword: kw }),
-      }).catch(() => {});
-    }
+    // Fire-and-forget tracking so search stays snappy.
+    apiPost(
+      'recommendation',
+      '/api/recommendations/track',
+      { actionType: 'SEARCH', searchKeyword: kw },
+      { withUserId: false }
+    ).catch(() => {});
   };
 
   return (
@@ -90,7 +91,6 @@ export default function SearchBar() {
         <Search className="w-4 h-4" />
       </button>
 
-      {/* Dropdown results */}
       {showDropdown && (
         <div className="absolute top-full left-0 right-0 bg-white border border-t-0 border-cyan-500 rounded-b-2xl shadow-xl overflow-hidden z-50">
           {results.length === 0 && !searching ? (

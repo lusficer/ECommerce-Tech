@@ -2,18 +2,20 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { 
+import {
   Laptop, Smartphone, Tablet, Headphones, Watch, 
   Monitor, Gamepad, Mouse, ArrowRight, Package, Loader2 
 } from 'lucide-react';
 
-// Tạo bộ Map để tự động gán Icon dựa theo Category ID từ Database
+import { apiGet } from '@/lib/api';
+
+// The API doesn't ship icons, so we map known category IDs to UI icons.
 const ICON_MAP: Record<string, React.ElementType> = {
   'CAT_LAPTOP': Laptop,
   'CAT_PHONE': Smartphone,
   'CAT_TABLET': Tablet,
   'CAT_AUDIO': Headphones,
-  'CAT_ACCESSORY': Watch, // Hoặc Mouse tùy bạn chọn
+  'CAT_ACCESSORY': Watch,
   'CAT_MONITOR': Monitor,
   'CAT_GAMING': Gamepad,
   'CAT_ELEC': Mouse,
@@ -30,18 +32,13 @@ export default function Categories() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Gọi API lấy danh mục từ Product Service
+    // Categories come from the product service.
     const fetchCategories = async () => {
       try {
-        // Lưu ý: Đảm bảo Backend của bạn đã có API này (nếu chưa, hãy tạo 1 hàm GET /api/categories đơn giản)
-        const res = await fetch('http://localhost:8083/api/categories'); 
-        if (res.ok) {
-          const data = await res.json();
-          // Lọc ra tối đa 8 category để nhét vừa layout grid
-          setCategories(data.slice(0, 8));
-        }
+        const data = await apiGet<CategoryDto[]>('product', '/api/categories', { withUserId: false });
+        setCategories((data ?? []).slice(0, 8));
       } catch (error) {
-        console.error("Lỗi khi load categories:", error);
+        console.error('Failed to load categories:', error);
       } finally {
         setLoading(false);
       }
@@ -56,7 +53,6 @@ export default function Categories() {
 
   return (
     <section className="w-full mt-16 font-sans">
-      {/* Title & View All */}
       <div className="flex items-center justify-between mb-8">
         <h2 className="text-2xl font-black text-slate-900 tracking-tight">Tech Categories</h2>
         <button 
@@ -67,7 +63,6 @@ export default function Categories() {
         </button>
       </div>
 
-      {/* Circular Icons Grid */}
       {loading ? (
         <div className="flex justify-center items-center h-32">
           <Loader2 className="w-8 h-8 animate-spin text-cyan-600" />
@@ -95,7 +90,6 @@ export default function Categories() {
         </div>
       )}
 
-      {/* Trust Banner (12k+ active users) */}
       <div className="w-full bg-slate-100 rounded-2xl py-6 flex items-center justify-center border border-slate-200 shadow-inner">
          <p className="text-sm font-bold text-slate-600">
            Trusted by <span className="text-cyan-600">12,000+</span> active users globally.

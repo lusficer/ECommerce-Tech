@@ -1,4 +1,3 @@
-// ===== src/components/seller/ProductForm.tsx =====
 'use client';
 
 import React from 'react';
@@ -52,8 +51,6 @@ export default function ProductForm({
 
       <form className="space-y-6" onSubmit={onSubmit}>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-
-          {/* Shop search — VENDOR only */}
           {showShopSearch && (
             <div className="md:col-span-2 bg-blue-50 p-5 rounded-2xl border border-blue-100 relative">
               <label className="block text-sm font-black text-blue-900 mb-2">
@@ -91,15 +88,11 @@ export default function ProductForm({
               )}
             </div>
           )}
-
-          {/* Product name */}
           <div>
             <label className="block text-sm font-bold text-slate-700 mb-2">Product Name <span className="text-red-500">*</span></label>
             <input type="text" required value={formData.name} onChange={(e) => field('name', e.target.value)}
               className="w-full px-4 py-3.5 rounded-xl border border-slate-200 focus:border-cyan-500 outline-none bg-slate-50 focus:bg-white text-sm" />
           </div>
-
-          {/* Price + Stock */}
           <div className="col-span-1 md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
               <label className="block text-sm font-bold text-slate-700 mb-2">Regular Price ($) <span className="text-red-500">*</span></label>
@@ -112,8 +105,6 @@ export default function ProductForm({
                 className="w-full px-4 py-3.5 rounded-xl border border-slate-200 focus:border-cyan-500 outline-none bg-slate-50 focus:bg-white text-sm" />
             </div>
           </div>
-
-          {/* Category + Brand */}
           <div>
             <label className="block text-sm font-bold text-slate-700 mb-2">Category <span className="text-red-500">*</span></label>
             <select value={formData.categoryId} onChange={(e) => field('categoryId', e.target.value)}
@@ -135,7 +126,6 @@ export default function ProductForm({
           </div>
         </div>
 
-        {/* Image */}
         <div>
           <label className="block text-sm font-bold text-slate-700 mb-2">Product Image</label>
           <input type="file" onChange={onImageChange} accept="image/*"
@@ -144,14 +134,12 @@ export default function ProductForm({
             className="w-full px-4 py-3.5 rounded-xl border border-slate-200 focus:border-cyan-500 outline-none bg-slate-50 focus:bg-white text-sm text-slate-500" />
         </div>
 
-        {/* Specifications */}
         <div>
           <label className="block text-sm font-bold text-slate-700 mb-2">Specifications / Attributes</label>
           <textarea placeholder='e.g. {"Color": "Space Gray", "Storage": "256GB"}' value={formData.specifications} onChange={(e) => field('specifications', e.target.value)}
             className="w-full px-4 py-3.5 rounded-xl border border-slate-200 focus:border-cyan-500 outline-none bg-slate-50 focus:bg-white text-sm font-mono text-slate-700 min-h-[120px]" />
         </div>
 
-        {/* Description */}
         <div>
           <label className="block text-sm font-bold text-slate-700 mb-2">Description</label>
           <textarea placeholder="Detail description of your product..." value={formData.description} onChange={(e) => field('description', e.target.value)}

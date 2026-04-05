@@ -4,6 +4,8 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
+import { apiGet, apiPut } from '@/lib/api';
+import type { VerificationContextDTO, RiskLevel } from '@/types';
 import { 
   ClipboardList, Truck, CheckCircle2, XCircle, 
   Search, Loader2, AlertTriangle, Package, ChevronLeft, ShieldAlert,
@@ -14,6 +16,12 @@ export default function ManagerOrdersPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   
+  const coerceTab = (value?: string | null): 'ALL' | 'PENDING' | 'SHIPPING' => {
+    const v = String(value || '').trim().toUpperCase();
+    if (v === 'ALL' || v === 'PENDING' || v === 'SHIPPING') return v;
+    return 'PENDING';
+  };
+
   const [activeTab, setActiveTab] = useState<'ALL' | 'PENDING' | 'SHIPPING'>('PENDING');
   
   const [allOrders, setAllOrders] = useState<any[]>([]);
@@ -30,6 +38,23 @@ export default function ManagerOrdersPage() {
     isApprove: true,
     reason: ''
   });
+
+  const [contextLoading, setContextLoading] = useState(false);
+  const [verificationContext, setVerificationContext] = useState<VerificationContextDTO | null>(null);
+  const [riskAcknowledged, setRiskAcknowledged] = useState(false);
+
+  // Initialize/sync active tab with query string (e.g. /manager/orders?tab=ALL)
+  useEffect(() => {
+    const syncFromUrl = () => {
+      const params = new URLSearchParams(window.location.search);
+      const next = coerceTab(params.get('tab'));
+      setActiveTab((prev) => (prev === next ? prev : next));
+    };
+
+    syncFromUrl();
+    window.addEventListener('popstate', syncFromUrl);
+    return () => window.removeEventListener('popstate', syncFromUrl);
+  }, []);
 
   useEffect(() => {
     const token = localStorage.getItem('accessToken');
@@ -51,20 +76,14 @@ export default function ManagerOrdersPage() {
     const fetchShopAndOrders = async () => {
       setLoading(true);
       try {
-        const shopRes = await fetch(`http://localhost:8082/api/shops/owner/${storedUserId}`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
-        
-        if (shopRes.ok) {
-          const shopData = await shopRes.json();
-          if (shopData && shopData.length > 0) {
-            const currentShopId = shopData[0].shopId;
-            setShopId(currentShopId);
-            await fetchOrders(activeTab, currentShopId, token);
-          } else {
-            toast.error("You don't have a shop yet. Please create one first.");
-            setLoading(false);
-          }
+        const shopData = await apiGet<any[]>('shop', `/api/shops/owner/${storedUserId}`, { withUserId: false });
+        if (shopData && shopData.length > 0) {
+          const currentShopId = shopData[0].shopId;
+          setShopId(currentShopId);
+          await fetchOrders(activeTab, currentShopId);
+        } else {
+          toast.error("You don't have a shop yet. Please create one first.");
+          setLoading(false);
         }
       } catch (err) {
         toast.error('Cannot connect to services');
@@ -75,7 +94,7 @@ export default function ManagerOrdersPage() {
     fetchShopAndOrders();
   }, [activeTab]);
 
-  const fetchOrders = async (tab: string, currentShopId: string, token: string) => {
+  const fetchOrders = async (tab: string, currentShopId: string) => {
     setLoading(true);
     try {
       let endpoint = '';
@@ -83,23 +102,48 @@ export default function ManagerOrdersPage() {
       else if (tab === 'PENDING') endpoint = `pending-verification`;
       else if (tab === 'SHIPPING') endpoint = `shipping`;
 
-      const res = await fetch(`http://localhost:8086/api/manager/orders/shop/${currentShopId}/${endpoint}`, {
-        headers: { 
-          'Authorization': `Bearer ${token}`
-        }
-      });
-      
-      if (res.ok) {
-        const data = await res.json();
-        if (tab === 'ALL') setAllOrders(data);
-        else if (tab === 'PENDING') setPendingOrders(data);
-        else setShippingOrders(data);
-      }
+      const data = await apiGet<any[]>('order', `/api/manager/orders/shop/${currentShopId}/${endpoint}`, { withUserId: false });
+      if (tab === 'ALL') setAllOrders(data);
+      else if (tab === 'PENDING') setPendingOrders(data);
+      else setShippingOrders(data);
     } catch (err) {
       toast.error('Cannot fetch orders');
     } finally {
       setLoading(false);
     }
+  };
+
+  const loadVerificationContext = async (orderId: string) => {
+    setContextLoading(true);
+    setVerificationContext(null);
+    try {
+      const ctx = await apiGet<VerificationContextDTO>(
+        'order',
+        `/api/manager/orders/${orderId}/verification-context`,
+        { withUserId: false, headers: { managerId } }
+      );
+      setVerificationContext(ctx);
+    } catch (e: any) {
+      toast.error(e?.message || 'Failed to load verification context');
+    } finally {
+      setContextLoading(false);
+    }
+  };
+
+  const getRiskBadgeClasses = (risk?: RiskLevel) => {
+    const level = String(risk || '').toUpperCase();
+    if (level === 'LOW') return 'bg-green-50 text-green-700 border-green-200';
+    if (level === 'MEDIUM') return 'bg-orange-50 text-orange-700 border-orange-200';
+    if (level === 'HIGH') return 'bg-red-50 text-red-700 border-red-200';
+    return 'bg-slate-50 text-slate-700 border-slate-200';
+  };
+
+  const getRiskBarClasses = (risk?: RiskLevel) => {
+    const level = String(risk || '').toUpperCase();
+    if (level === 'LOW') return 'bg-green-500';
+    if (level === 'MEDIUM') return 'bg-orange-500';
+    if (level === 'HIGH') return 'bg-red-500';
+    return 'bg-slate-400';
   };
 
   const handleVerifySubmit = async () => {
@@ -108,34 +152,34 @@ export default function ManagerOrdersPage() {
       return;
     }
 
+    const isHighRisk = String(verificationContext?.riskLevel || '').toUpperCase() === 'HIGH';
+    const riskAckRequired = verifyModal.isApprove && isHighRisk;
+    if (riskAckRequired && !riskAcknowledged) {
+      toast.error('Please acknowledge the risk to approve this order.');
+      return;
+    }
+
     setActionLoading(true);
-    const token = localStorage.getItem('accessToken');
-
     try {
-      const res = await fetch(`http://localhost:8086/api/manager/orders/${verifyModal.orderId}/verify`, {
-        method: 'PUT',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-          'managerId': managerId
-        },
-        body: JSON.stringify({
-          managerId: managerId,
+      await apiPut(
+        'order',
+        `/api/manager/orders/${verifyModal.orderId}/verify`,
+        {
+          managerId,
           approved: verifyModal.isApprove,
-          reason: verifyModal.isApprove ? 'Approved by Manager' : verifyModal.reason
-        })
-      });
+          reason: verifyModal.isApprove ? 'Approved by Manager' : verifyModal.reason,
+          ...(riskAckRequired ? { riskAcknowledged: true } : {}),
+        },
+        { withUserId: false, headers: { managerId } }
+      );
 
-      if (res.ok) {
-        toast.success(verifyModal.isApprove ? 'Order Approved!' : 'Order Rejected!');
-        setVerifyModal({ ...verifyModal, isOpen: false, reason: '' });
-        fetchOrders(activeTab, shopId, token!); 
-      } else {
-        const err = await res.json();
-        toast.error(err.message || 'Verification failed');
-      }
-    } catch (err) {
-      toast.error('Server connection error');
+      toast.success(verifyModal.isApprove ? 'Order Approved!' : 'Order Rejected!');
+      setVerifyModal({ ...verifyModal, isOpen: false, reason: '' });
+      setVerificationContext(null);
+      setRiskAcknowledged(false);
+      fetchOrders(activeTab, shopId);
+    } catch (err: any) {
+      toast.error(err?.message || 'Server connection error');
     } finally {
       setActionLoading(false);
     }
@@ -143,6 +187,8 @@ export default function ManagerOrdersPage() {
 
   const openVerifyModal = (orderId: string, isApprove: boolean) => {
     setVerifyModal({ isOpen: true, orderId, isApprove, reason: '' });
+    setRiskAcknowledged(false);
+    loadVerificationContext(orderId);
   };
 
   const getStatusColor = (status: string) => {
@@ -160,13 +206,11 @@ export default function ManagerOrdersPage() {
     }
   };
 
-  // Render danh sách đơn hàng
   const renderOrderCard = (order: any) => {
     const isPending = order.orderStatus === 'PENDING_VERIFICATION';
     
     return (
       <div key={order.orderId} className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-col lg:flex-row">
-        {/* Header Info */}
         <div className="p-6 lg:w-1/3 border-b lg:border-b-0 lg:border-r border-slate-100 bg-slate-50/30">
           <div className="flex items-center gap-2 mb-4">
             <span className="text-sm font-black text-slate-900">#{order.orderId}</span>
@@ -187,7 +231,6 @@ export default function ManagerOrdersPage() {
           </div>
         </div>
 
-        {/* Items Preview */}
         <div className="p-6 lg:w-1/3 border-b lg:border-b-0 lg:border-r border-slate-100">
           <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-3">Order Items</h4>
           <div className="space-y-3">
@@ -209,7 +252,6 @@ export default function ManagerOrdersPage() {
           </div>
         </div>
 
-        {/* Actions / Tracking Info */}
         <div className="p-6 lg:w-1/3 flex flex-col justify-center bg-slate-50/50">
           {isPending ? (
             <div className="space-y-3">
@@ -345,6 +387,127 @@ export default function ManagerOrdersPage() {
                 {verifyModal.isApprove && " This will move the order to NEW status for the vendor to process."}
               </p>
 
+              <div className="mb-6">
+                <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-3">Verification Context</p>
+                {contextLoading ? (
+                  <div className="flex items-center gap-2 text-slate-500 text-sm">
+                    <Loader2 className="w-4 h-4 animate-spin" /> Loading context...
+                  </div>
+                ) : verificationContext ? (
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="p-3 rounded-xl border border-slate-200 bg-slate-50">
+                        <p className="text-[11px] font-black text-slate-400 uppercase tracking-wider">Payment Status</p>
+                        <p className="text-sm font-bold text-slate-800 mt-1">{verificationContext.paymentStatus || 'N/A'}</p>
+                      </div>
+                      <div className="p-3 rounded-xl border border-slate-200 bg-slate-50">
+                        <p className="text-[11px] font-black text-slate-400 uppercase tracking-wider">Payment Method</p>
+                        <p className="text-sm font-bold text-slate-800 mt-1">{verificationContext.paymentMethod || 'N/A'}</p>
+                      </div>
+                      <div className="p-3 rounded-xl border border-slate-200 bg-white col-span-2 flex items-center justify-between gap-3">
+                        <div>
+                          <p className="text-[11px] font-black text-slate-400 uppercase tracking-wider">Risk Level</p>
+                          <div className="mt-1 flex items-center gap-2">
+                            <span className={`px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider border ${getRiskBadgeClasses(verificationContext.riskLevel)}`}>
+                              {String(verificationContext.riskLevel || 'N/A')}
+                            </span>
+                            <span className={`px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider border ${getRiskBadgeClasses(verificationContext.paymentRiskLevel)}`}>
+                              Payment: {String(verificationContext.paymentRiskLevel || 'N/A')}
+                            </span>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-[11px] font-black text-slate-400 uppercase tracking-wider">Fraud Score</p>
+                          <p className="text-lg font-black text-slate-900 mt-1">{typeof verificationContext.fraudScore === 'number' ? verificationContext.fraudScore : 'N/A'}</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {typeof verificationContext.fraudScore === 'number' && (
+                      <div className="w-full">
+                        <div className="w-full h-2 bg-slate-200 rounded-full overflow-hidden">
+                          <div
+                            className={`h-2 ${getRiskBarClasses(verificationContext.riskLevel)} rounded-full`}
+                            style={{ width: `${Math.max(0, Math.min(100, verificationContext.fraudScore))}%` }}
+                          />
+                        </div>
+                        <p className="text-xs text-slate-500 mt-2">Score range: 0 (low) → 100 (high)</p>
+                      </div>
+                    )}
+
+                    {verificationContext.fraudSignals && (
+                      <div className="p-4 rounded-2xl border border-slate-200 bg-white">
+                        <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-3">Fraud Signals</p>
+                        <div className="space-y-2 text-sm">
+                          {(
+                            [
+                              { key: 'isNewAccount', label: 'New account' },
+                              { key: 'recentOrderCount', label: 'Recent order count' },
+                              { key: 'recentCancelCount', label: 'Recent cancel count' },
+                              { key: 'hasDisputeHistory', label: 'Has dispute history' },
+                              { key: 'addressMismatch', label: 'Address mismatch' },
+                            ] as const
+                          ).map(({ key, label }) => {
+                            const val = (verificationContext.fraudSignals as any)[key];
+                            if (val === undefined || val === null) return null;
+
+                            const isBoolean = typeof val === 'boolean';
+                            const isNumber = typeof val === 'number';
+                            const risky =
+                              (isBoolean && val === true) ||
+                              (key === 'recentCancelCount' && isNumber && val > 0) ||
+                              (key === 'addressMismatch' && isBoolean && val === true) ||
+                              (key === 'hasDisputeHistory' && isBoolean && val === true) ||
+                              (key === 'isNewAccount' && isBoolean && val === true);
+
+                            return (
+                              <div key={key} className="flex items-center justify-between gap-3">
+                                <div className="flex items-center gap-2 min-w-0">
+                                  {risky ? (
+                                    <AlertTriangle className="w-4 h-4 text-orange-600 shrink-0" />
+                                  ) : (
+                                    <CheckCircle2 className="w-4 h-4 text-green-600 shrink-0" />
+                                  )}
+                                  <span className="font-bold text-slate-700 truncate">{label}</span>
+                                </div>
+                                <span className={`text-xs font-black px-2 py-1 rounded-lg border ${risky ? 'bg-orange-50 text-orange-700 border-orange-200' : 'bg-green-50 text-green-700 border-green-200'}`}>
+                                  {isBoolean ? (val ? 'YES' : 'NO') : String(val)}
+                                </span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    {String(verificationContext.riskLevel || '').toUpperCase() === 'HIGH' && (
+                      <div className="p-4 rounded-2xl border border-red-200 bg-red-50">
+                        <div className="flex items-start gap-3">
+                          <AlertTriangle className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
+                          <div>
+                            <p className="font-black text-red-700">High risk order</p>
+                            <p className="text-sm text-red-700/80 mt-1">Extra caution is required before approving.</p>
+                          </div>
+                        </div>
+                        {verifyModal.isApprove && (
+                          <label className="mt-4 flex items-start gap-3 cursor-pointer select-none">
+                            <input
+                              type="checkbox"
+                              checked={riskAcknowledged}
+                              onChange={(e) => setRiskAcknowledged(e.target.checked)}
+                              className="mt-1 h-4 w-4 rounded border-slate-300 accent-red-600"
+                            />
+                            <span className="text-sm font-bold text-red-700">I acknowledge the risk</span>
+                          </label>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="text-sm text-slate-500">No context available.</div>
+                )}
+              </div>
+
               {!verifyModal.isApprove && (
                 <div>
                   <label className="block text-sm font-bold text-slate-700 mb-2">
@@ -370,7 +533,10 @@ export default function ManagerOrdersPage() {
               </button>
               <button 
                 onClick={handleVerifySubmit}
-                disabled={actionLoading}
+                disabled={
+                  actionLoading ||
+                  (verifyModal.isApprove && String(verificationContext?.riskLevel || '').toUpperCase() === 'HIGH' && !riskAcknowledged)
+                }
                 className={`flex-1 px-4 py-3 text-white font-bold rounded-xl shadow-md transition-colors flex items-center justify-center gap-2 ${
                   verifyModal.isApprove ? 'bg-green-500 hover:bg-green-600' : 'bg-red-500 hover:bg-red-600'
                 }`}

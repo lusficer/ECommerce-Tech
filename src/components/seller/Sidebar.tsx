@@ -1,4 +1,3 @@
-// ===== src/components/seller/Sidebar.tsx =====
 'use client';
 
 import React from 'react';
@@ -41,7 +40,6 @@ export default function Sidebar({
 
   return (
     <div className="w-full lg:w-1/4 flex flex-col gap-4 sticky top-28">
-      {/* Role card */}
       <div className="bg-slate-900 rounded-3xl p-8 text-white shadow-lg overflow-hidden relative">
         <div className="absolute top-0 right-0 p-4 opacity-10 text-cyan-500">
           {role === 'SHIPPER'
@@ -56,7 +54,6 @@ export default function Sidebar({
         </div>
       </div>
 
-      {/* Nav */}
       <div className="bg-white rounded-3xl p-4 border border-slate-200 shadow-sm flex flex-col gap-1">
         {nav('dashboard', <TrendingUp className="w-5 h-5" />, 'Overview')}
 
@@ -115,6 +112,17 @@ export default function Sidebar({
                   <Settings className="w-5 h-5" /> Shop Settings
                 </button>
               </>
+            )}
+
+            {role === 'VENDOR' && (
+              <button
+                onClick={() => onTabChange('settings')}
+                className={`flex items-center gap-3 p-4 rounded-xl font-bold text-sm transition-all w-full text-left ${
+                  activeTab === 'settings' ? 'bg-cyan-50 text-cyan-600' : 'text-slate-600 hover:bg-slate-50'
+                }`}
+              >
+                <Settings className="w-5 h-5" /> Shop Profile
+              </button>
             )}
           </>
         )}

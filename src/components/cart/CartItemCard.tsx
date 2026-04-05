@@ -1,4 +1,3 @@
-// ===== src/components/cart/CartItemCard.tsx =====
 'use client';
 
 import React from 'react';
@@ -34,7 +33,6 @@ export default function CartItemCard({
         ${isUpdating ? 'opacity-50 pointer-events-none' : ''}
         ${isSelected ? 'bg-cyan-50/30' : 'hover:bg-slate-50'}`}
     >
-      {/* Checkbox */}
       <div className="absolute top-5 left-5 sm:static sm:mt-12 shrink-0">
         <input
           type="checkbox"
@@ -44,7 +42,6 @@ export default function CartItemCard({
         />
       </div>
 
-      {/* Product image */}
       <Link
         href={`/products/${item.productId}`}
         className="w-24 h-24 sm:w-28 sm:h-28 shrink-0 bg-white rounded-xl border border-slate-200 flex items-center justify-center p-2 group mt-6 sm:mt-0"
@@ -56,7 +53,6 @@ export default function CartItemCard({
         />
       </Link>
 
-      {/* Info */}
       <div className="flex-1 flex flex-col w-full">
         <div className="pr-10 mb-2">
           <Link href={`/products/${item.productId}`}>
@@ -66,7 +62,6 @@ export default function CartItemCard({
           </Link>
         </div>
 
-        {/* Price row */}
         <div className="flex flex-wrap items-center gap-2 mb-4">
           <span className="text-lg font-black text-cyan-600">
             {formatCurrency(item.unitPrice)}
@@ -83,7 +78,6 @@ export default function CartItemCard({
           )}
         </div>
 
-        {/* Qty + subtotal */}
         <div className="mt-auto flex items-center justify-between">
           <div className="flex items-center bg-white border border-slate-200 rounded-xl p-1 w-28">
             <button
@@ -116,7 +110,6 @@ export default function CartItemCard({
         </div>
       </div>
 
-      {/* Remove button */}
       <button
         onClick={() => onUpdateQuantity(item.itemId, 0)}
         className="absolute top-4 right-4 p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-colors"

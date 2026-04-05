@@ -1,5 +1,4 @@
-// ===== src/types/index.ts =====
-// Centralized TypeScript interfaces for the entire application
+// Shared domain types to keep API shapes consistent across features
 
 export interface Product {
   productId: string;
@@ -63,6 +62,7 @@ export type OrderStatus =
   | 'READY_TO_SHIP'
   | 'SHIPPING'
   | 'DELIVERED'
+  | 'COMPLETE'
   | 'COMPLETED'
   | 'DISPUTED'
   | 'CANCELLED'
@@ -120,9 +120,97 @@ export interface Shop {
   description?: string;
   logoUrl?: string;
   address?: string;
+  phone?: string;
+  warehouseAddress?: string | null;
+  warehouseCity?: string | null;
+  warehouseDistrict?: string | null;
+  warehouseWard?: string | null;
+  warehousePhone?: string | null;
   createdAt?: string;
   status?: string;
   ownerId?: string;
+}
+
+export interface UpdateShopProfileRequest {
+  shopName?: string;
+  description?: string;
+  logoUrl?: string;
+  address?: string;
+  phone?: string;
+  warehouseAddress?: string;
+  warehouseCity?: string;
+  warehouseDistrict?: string;
+  warehouseWard?: string;
+  warehousePhone?: string;
+}
+
+export interface ShippingResponseDTO {
+  shippingId?: string;
+  orderId?: string;
+  shipperId?: string;
+  status?: string;
+
+  pickupAddress?: string;
+  pickupCity?: string;
+  pickupDistrict?: string;
+  pickupWard?: string;
+  pickupPhone?: string;
+
+  deliveryAddress?: string;
+  deliveryCity?: string;
+  deliveryDistrict?: string;
+  deliveryWard?: string;
+  deliveryPhone?: string;
+}
+
+export type RiskLevel = 'LOW' | 'MEDIUM' | 'HIGH' | string;
+
+export interface FraudSignals {
+  isNewAccount?: boolean;
+  recentOrderCount?: number;
+  recentCancelCount?: number;
+  hasDisputeHistory?: boolean;
+  addressMismatch?: boolean;
+  // Allow backend to add more signals without breaking the UI
+  [key: string]: unknown;
+}
+
+export interface VerificationOrderSummary {
+  grandTotal: number;
+  items?: OrderItem[];
+  address?: OrderAddress;
+}
+
+export interface VerificationContextDTO {
+  paymentStatus?: string;
+  paymentMethod?: string;
+  paymentRiskLevel?: RiskLevel;
+  fraudSignals?: FraudSignals;
+  fraudScore?: number; // 0-100
+  riskLevel?: RiskLevel;
+  orderSummary?: VerificationOrderSummary;
+}
+
+export interface ShipperAvailableOrderDTO {
+  orderId: string;
+  shopId: string;
+  grandTotal: number;
+  userId?: string;
+
+  pickupAddress?: string;
+  pickupCity?: string;
+  pickupDistrict?: string;
+  pickupWard?: string;
+  pickupPhone?: string;
+
+  deliveryAddress?: string;
+  deliveryCity?: string;
+  deliveryDistrict?: string;
+  deliveryWard?: string;
+  deliveryPhone?: string;
+
+  // Backward/extra fields that may appear
+  [key: string]: unknown;
 }
 
 export interface Review {
@@ -151,4 +239,41 @@ export interface UserProfile {
   avatar?: string;
   address?: string;
   role?: string;
+}
+
+export type NotificationType =
+  // Customer
+  | 'ORDER_STATUS_CHANGED'
+  | 'ORDER_VERIFIED'
+  | 'ORDER_REJECTED'
+  | 'DISPUTE_RESOLVED'
+  | 'DISPUTE_NEEDS_INFO'
+  // Vendor
+  | 'NEW_ORDER_RECEIVED'
+  | 'PRODUCT_APPROVED'
+  | 'PRODUCT_REJECTED'
+  | 'LOW_STOCK_WARNING'
+  // Manager
+  | 'ORDER_PENDING_VERIFICATION'
+  | 'NEW_DISPUTE_CREATED'
+  // Shipper
+  | 'ORDER_AVAILABLE_FOR_PICKUP'
+  | string;
+
+export type NotificationReferenceType = 'ORDER' | 'PRODUCT' | 'DISPUTE' | string;
+
+export interface NotificationDTO {
+  // Backends may use either `id` or `notificationId`; the UI normalizes.
+  id?: string | number;
+  notificationId?: string | number;
+  type: NotificationType;
+  title?: string;
+  message?: string;
+  createdAt?: string;
+  referenceType?: NotificationReferenceType;
+  referenceId?: string | number;
+  read?: boolean;
+  isRead?: boolean;
+  // Allow extra fields without breaking the UI.
+  [key: string]: unknown;
 }

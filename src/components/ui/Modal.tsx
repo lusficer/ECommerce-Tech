@@ -1,5 +1,4 @@
-// ===== src/components/ui/Modal.tsx =====
-// Reusable modal wrapper — header + scrollable body + footer
+// Reusable modal wrapper with a scrollable body
 
 'use client';
 
@@ -12,24 +11,15 @@ export interface ModalProps {
   title: React.ReactNode;
   children: React.ReactNode;
   footer?: React.ReactNode;
-  /** Max width Tailwind class, default "max-w-md" */
+  // Max width Tailwind class.
   maxWidth?: string;
-  /** Optional extra class for the header background */
+  // Optional extra class for the header background.
   headerClassName?: string;
-  /** Optional icon shown left of the title */
+  // Optional icon shown left of the title.
   titleIcon?: React.ReactNode;
 }
 
-/**
- * Generic modal with a dimmed backdrop.
- * Usage:
- * ```tsx
- * <Modal isOpen={open} onClose={() => setOpen(false)} title="Confirm Delete"
- *   footer={<><button onClick={onClose}>Cancel</button><button onClick={confirm}>Delete</button></>}>
- *   <p>Are you sure?</p>
- * </Modal>
- * ```
- */
+// Generic modal with a dimmed backdrop.
 export default function Modal({
   isOpen,
   onClose,
@@ -46,14 +36,13 @@ export default function Modal({
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200"
       onClick={(e) => {
-        // Close on backdrop click
+        // Only close when clicking the backdrop.
         if (e.target === e.currentTarget) onClose();
       }}
     >
       <div
         className={`bg-white rounded-3xl shadow-2xl w-full ${maxWidth} overflow-hidden animate-in zoom-in-95 duration-200`}
       >
-        {/* Header */}
         <div
           className={`flex items-center justify-between p-5 border-b border-slate-100 ${headerClassName}`}
         >
@@ -69,10 +58,8 @@ export default function Modal({
           </button>
         </div>
 
-        {/* Body */}
         <div className="p-6 max-h-[70vh] overflow-y-auto">{children}</div>
 
-        {/* Footer */}
         {footer && (
           <div className="p-4 bg-slate-50 border-t border-slate-100 flex gap-3">
             {footer}

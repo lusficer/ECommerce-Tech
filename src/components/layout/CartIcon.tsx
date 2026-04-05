@@ -1,10 +1,10 @@
-// ===== src/components/layout/CartIcon.tsx =====
 'use client';
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { ShoppingCart } from 'lucide-react';
 import { getAuth } from '@/lib/auth';
+import { apiGet } from '@/lib/api';
 import { formatCurrency, getFirstImage } from '@/lib/format';
 
 export default function CartIcon() {
@@ -15,14 +15,9 @@ export default function CartIcon() {
     const { token, userId } = getAuth();
     if (!token || !userId) return;
     try {
-      const res = await fetch('http://localhost:8088/api/cart', {
-        headers: { Authorization: `Bearer ${token}`, userId },
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setCount(data.totalItems || 0);
-        setItems(data.items || []);
-      }
+      const data = await apiGet<any>('cart', '/api/cart');
+      setCount(data?.totalItems || 0);
+      setItems(data?.items || []);
     } catch {}
   };
 
@@ -42,8 +37,6 @@ export default function CartIcon() {
           </span>
         )}
       </Link>
-
-      {/* Mini-cart hover dropdown */}
       <div className="absolute right-0 top-full w-80 md:w-96 pt-2 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-300 z-[100] transform origin-top-right scale-95 group-hover:scale-100">
         <div className="bg-white rounded-2xl shadow-[0_20px_50px_-12px_rgba(0,0,0,0.15)] border border-slate-100 overflow-hidden flex flex-col">
           <div className="p-4 border-b border-slate-100 bg-slate-50/50">

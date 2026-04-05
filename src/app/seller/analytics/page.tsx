@@ -13,13 +13,16 @@ import {
   CartesianGrid, Tooltip, ResponsiveContainer 
 } from 'recharts';
 
+import { logout } from '@/lib/auth';
+import { apiGet, getUserFacingErrorMessage, isApiError } from '@/lib/api';
+
 export default function UnifiedAnalyticsDashboard() {
   const router = useRouter();
 
   const [loading, setLoading] = useState(true);
   const [shopId, setShopId] = useState<string>(''); 
   const [shops, setShops] = useState<any[]>([]); 
-  const [userRole, setUserRole] = useState<string>(''); // Lưu role hiện tại
+  const [userRole, setUserRole] = useState<string>(''); // Current role
   
   const [revenueData, setRevenueData] = useState<any[]>([]);
   const [topProducts, setTopProducts] = useState<any[]>([]);
@@ -50,108 +53,124 @@ export default function UnifiedAnalyticsDashboard() {
     setUserRole(storedRole);
 
     if (storedRole.startsWith('SHOP_MNG')) {
-      fetchManagerShops(storedUserId, token, storedRole);
+      fetchManagerShops(storedUserId, storedRole);
     } else if (storedRole.startsWith('VEND')) {
-      fetchVendorShops(storedUserId, token, storedRole);
+      fetchVendorShops(storedUserId, storedRole);
     } else {
-      toast.error("Unauthorized access. Invalid user format.");
+      toast.error('Unauthorized access. Invalid user role.');
 
     }
   }, [router]);
 
-  // API lấy Shop cho MANAGER
-  const fetchManagerShops = async (userId: string, token: string, role: string) => {
+  // Fetch shops for MANAGER
+  const fetchManagerShops = async (userId: string, role: string) => {
     try {
-      const res = await fetch(`http://localhost:8082/api/shops/owner/${userId}`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      handleShopResponse(res, token, role, "You don't own any shops.");
+      const data = await apiGet<any[]>(
+        'shop',
+        `/api/shops/owner/${userId}`,
+        { withUserId: false }
+      );
+      handleShopList(data, role, "You don't own any shops.");
     } catch (err) {
-      console.error(err);
-      setLoading(false);
-    }
-  };
-
-  // API lấy Shop cho VENDOR
-  const fetchVendorShops = async (userId: string, token: string, role: string) => {
-    try {
-      const res = await fetch(`http://localhost:8082/api/shops/my-assigned-shops`, {
-        headers: { 
-          'Authorization': `Bearer ${token}`,
-          'userId': userId
-        }
-      });
-      handleShopResponse(res, token, role, "You are not assigned to manage any Shop!");
-    } catch (err) {
-      console.error(err);
-      setLoading(false);
-    }
-  };
-
-  // Hàm xử lý chung sau khi lấy được danh sách Shop
-  const handleShopResponse = async (res: Response, token: string, role: string, emptyMsg: string) => {
-    if (res.ok) {
-      const data = await res.json();
-      if (data && data.length > 0) {
-        setShops(data); 
-        const actualShopId = data[0].shopId; 
-        setShopId(actualShopId);
-        fetchShopStats(actualShopId, token, startDate, endDate, role); // Gọi stats với role tương ứng
-      } else {
-        setLoading(false);
-        toast.error(emptyMsg);
+      if (isApiError(err) && (err.status === 401 || err.status === 403)) {
+        logout();
+        toast.error('Your session has expired. Please sign in again.');
+        router.push('/login');
+        return;
       }
+      console.error(err);
+      setLoading(false);
+    }
+  };
+
+  // Fetch shops for VENDOR
+  const fetchVendorShops = async (userId: string, role: string) => {
+    try {
+      const data = await apiGet<any[]>(
+        'shop',
+        '/api/shops/my-assigned-shops'
+      );
+      handleShopList(data, role, 'You are not assigned to manage any shop.');
+    } catch (err) {
+      if (isApiError(err) && (err.status === 401 || err.status === 403)) {
+        logout();
+        toast.error('Your session has expired. Please sign in again.');
+        router.push('/login');
+        return;
+      }
+      console.error(err);
+      setLoading(false);
+    }
+  };
+
+  // Shared handler after retrieving shop list
+  const handleShopList = async (data: any[] | undefined, role: string, emptyMsg: string) => {
+    if (data && data.length > 0) {
+      setShops(data);
+      const actualShopId = data[0].shopId;
+      setShopId(actualShopId);
+      fetchShopStats(actualShopId, startDate, endDate, role);
     } else {
       setLoading(false);
-      toast.error("Unable to verify shop information.");
+      toast.error(emptyMsg);
     }
   };
 
-  const fetchShopStats = async (sId: string, token: string, start: string, end: string, role: string) => {
+  const fetchShopStats = async (sId: string, start: string, end: string, role: string) => {
     setLoading(true);
     try {
-      // Logic verify Base URL dựa trên Role
+      // Determine stats base URL by role
       const isManager = role.startsWith('SHOP_MNG');
-      const statsBaseUrl = isManager 
-        ? `http://localhost:8087/api/manager/stats/shop/${sId}`
-        : `http://localhost:8087/api/vendor/stats/${sId}`;
+      const statsBasePath = isManager
+        ? `/api/manager/stats/shop/${sId}`
+        : `/api/vendor/stats/${sId}`;
 
-      const revRes = await fetch(`${statsBaseUrl}/revenue?startDate=${start}&endDate=${end}`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      
-      if (revRes.ok) {
-        const data = await revRes.json();
-        if (!Array.isArray(data)) {
-          setRevenueData([{
+      const revenue = await apiGet<any>(
+        'stats',
+        `${statsBasePath}/revenue?startDate=${start}&endDate=${end}`,
+        { withUserId: false }
+      );
+
+      if (!Array.isArray(revenue)) {
+        setRevenueData([
+          {
             date: 'Total Period',
-            totalRevenue: data.totalRevenue || data.revenue || 0,
-            totalOrders: data.totalOrders || data.orders || 0,
-            totalItemsSold: data.totalItemsSold || 0
-          }]);
-        } else {
-          setRevenueData(data.map((item: any) => ({
+            totalRevenue: revenue?.totalRevenue || revenue?.revenue || 0,
+            totalOrders: revenue?.totalOrders || revenue?.orders || 0,
+            totalItemsSold: revenue?.totalItemsSold || 0,
+          },
+        ]);
+      } else {
+        setRevenueData(
+          revenue.map((item: any) => ({
             date: item.date,
             totalRevenue: item.totalRevenue || item.revenue || 0,
             totalOrders: item.totalOrders || item.orders || 0,
-            totalItemsSold: item.totalItemsSold || 0
-          })));
-        }
+            totalItemsSold: item.totalItemsSold || 0,
+          }))
+        );
       }
 
-      const topRes = await fetch(`${statsBaseUrl}/top-products`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      
-      if (topRes.ok) {
-        setTopProducts(await topRes.json());
-      } else {
-        setTopProducts([]);
-      }
+      const top = await apiGet<any[]>(
+        'stats',
+        `${statsBasePath}/top-products`,
+        { withUserId: false }
+      );
+      setTopProducts(top ?? []);
       
     } catch (err) {
       console.error("Error fetching stats:", err);
-      toast.error("Error occurred while fetching analytics data.");
+      if (isApiError(err) && (err.status === 401 || err.status === 403)) {
+        logout();
+        toast.error('Your session has expired. Please sign in again.');
+        router.push('/login');
+        return;
+      }
+      toast.error(
+        getUserFacingErrorMessage(err, {
+          defaultMessage: 'Failed to load analytics data.',
+        })
+      );
     } finally {
       setLoading(false);
     }
@@ -160,7 +179,7 @@ export default function UnifiedAnalyticsDashboard() {
   const handleDateFilter = () => {
     const token = localStorage.getItem('accessToken');
     if (token && shopId) {
-      fetchShopStats(shopId, token, startDate, endDate, userRole);
+      fetchShopStats(shopId, startDate, endDate, userRole);
     }
   };
 
@@ -169,7 +188,7 @@ export default function UnifiedAnalyticsDashboard() {
     setShopId(newShopId);
     const token = localStorage.getItem('accessToken');
     if (token) {
-      fetchShopStats(newShopId, token, startDate, endDate, userRole);
+      fetchShopStats(newShopId, startDate, endDate, userRole);
     }
   };
 
@@ -185,7 +204,7 @@ export default function UnifiedAnalyticsDashboard() {
     );
   }
 
-  // Tùy chỉnh link Back dựa theo Role
+  // Customize back link based on role
   const backLinkUrl = userRole.includes('MANAGER') ? '/manager/dashboard' : '/vendor/dashboard';
 
   return (
@@ -207,8 +226,7 @@ export default function UnifiedAnalyticsDashboard() {
             </div>
             
             <div className="flex flex-wrap items-center gap-2 bg-slate-800 p-1.5 rounded-xl mt-4 md:mt-0">
-              
-              {/* SHOP DROPDOWN */}
+
               {shops.length > 0 && (
                 <div className="flex items-center bg-slate-900 px-3 py-2 rounded-lg border border-slate-700">
                   <Store className="w-4 h-4 text-cyan-400 mr-2 shrink-0" />
@@ -219,7 +237,6 @@ export default function UnifiedAnalyticsDashboard() {
                   >
                     {shops.map((shop) => (
                       <option key={shop.shopId} value={shop.shopId} className="bg-slate-800 text-white">
-                        {/* Hỗ trợ cả shopName (Vendor API) và name (Manager API) */}
                         {shop.shopName || shop.name || `Shop #${shop.shopId.substring(0, 8)}`}
                       </option>
                     ))}

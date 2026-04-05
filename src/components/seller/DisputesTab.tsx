@@ -1,16 +1,15 @@
-// ===== src/components/seller/DisputesTab.tsx =====
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
 import {
   Scale, ChevronDown, ChevronUp, FileText, Send,
   CheckCircle2, XCircle, AlertCircle, Clock, Eye, Loader2,
   MessageSquare, Gavel, Link as LinkIcon, X
 } from 'lucide-react';
-import { getAuth } from '@/lib/auth';
-
-/* ──────────────────────────── Types ──────────────────────────── */
+import { getAuth, logout } from '@/lib/auth';
+import { apiGet, apiPost, getUserFacingErrorMessage, isApiError } from '@/lib/api';
 
 interface Evidence {
   evidenceId?: number;
@@ -25,7 +24,7 @@ interface Evidence {
 interface Dispute {
   disputeId: string;
   orderId: string;
-  userId: string; // Đã đổi từ vendorId thành userId
+  userId: string; 
   shopId: string;
   reason: string;
   description: string;
@@ -40,11 +39,9 @@ interface Dispute {
 }
 
 interface DisputesTabProps {
-  userId: string; // Manager ID
+  userId: string; 
   shopId: string;
 }
-
-/* ──────────────────────────── Constants ──────────────────────── */
 
 const DISPUTE_REASONS = [
   { value: 'PAYMENT_ISSUE', label: 'Payment Issue' },
@@ -63,41 +60,42 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string; 
   RESOLVED_REJECTED: { label: 'Request Rejected',  color: 'text-red-700',    bg: 'bg-red-50 border-red-200',       icon: <XCircle size={14} /> },
 };
 
-const API_BASE = 'http://localhost:8084';
-
-/* ──────────────────────────── Component ──────────────────────── */
-
 export default function DisputesTab({ userId, shopId }: DisputesTabProps) {
+  const router = useRouter();
   const [disputes, setDisputes]       = useState<Dispute[]>([]);
   const [loading, setLoading]         = useState(true);
   const [expandedId, setExpandedId]   = useState<string | null>(null);
   const [submitting, setSubmitting]   = useState(false);
 
-  // Manager modals
   const [requestInfoModal, setRequestInfoModal] = useState({ isOpen: false, disputeId: '', message: '' });
   const [resolveModal, setResolveModal]         = useState({ isOpen: false, disputeId: '', resolutionType: 'APPROVED' as 'APPROVED' | 'REJECTED', resolutionSummary: '', refundAmount: 0 });
 
-  /* ──────────────────── Fetch disputes ──────────────────── */
+  const handleSessionExpired = (err: unknown): boolean => {
+    if (isApiError(err) && (err.status === 401 || err.status === 403)) {
+      logout();
+      toast.error('Your session has expired. Please sign in again.');
+      router.push('/login');
+      return true;
+    }
+    return false;
+  };
 
   const fetchDisputes = useCallback(async () => {
     setLoading(true);
     const { token } = getAuth();
-    if (!token) return;
+    if (!token) {
+      setDisputes([]);
+      setLoading(false);
+      return;
+    }
 
     try {
-      const res = await fetch(`${API_BASE}/api/manager/disputes`, { 
-        headers: { 
-          'Authorization': `Bearer ${token}`,
-          'SHOP-ID': shopId
-        } 
+      const data = await apiGet<Dispute[]>('dispute', '/api/manager/disputes', {
+        headers: { 'SHOP-ID': shopId },
       });
-      if (res.ok) {
-        const data = await res.json();
-        setDisputes(Array.isArray(data) ? data : []);
-      } else {
-        setDisputes([]);
-      }
-    } catch {
+      setDisputes(Array.isArray(data) ? data : []);
+    } catch (err) {
+      if (handleSessionExpired(err)) return;
       setDisputes([]);
     } finally {
       setLoading(false);
@@ -106,54 +104,43 @@ export default function DisputesTab({ userId, shopId }: DisputesTabProps) {
 
   useEffect(() => { fetchDisputes(); }, [fetchDisputes]);
 
-  /* ──────────────────── Fetch single dispute detail ──────────────────── */
-
   const fetchDisputeDetail = async (disputeId: string) => {
     const { token } = getAuth();
     if (!token) return;
 
     try {
-      const res = await fetch(`${API_BASE}/api/manager/disputes/${disputeId}`, { 
-        headers: { 'Authorization': `Bearer ${token}` } 
-      });
-      if (res.ok) {
-        const detail = await res.json();
-        setDisputes(prev => prev.map(d => d.disputeId === disputeId ? detail : d));
+      const detail = await apiGet<Dispute>('dispute', `/api/manager/disputes/${encodeURIComponent(disputeId)}`);
+      setDisputes(prev => prev.map(d => d.disputeId === disputeId ? detail : d));
+    } catch (err) {
+      if (!handleSessionExpired(err)) {
+        toast.error(getUserFacingErrorMessage(err, { defaultMessage: 'Failed to load dispute details.' }));
       }
-    } catch {}
+    }
   };
-
-  /* ──────────────────── MANAGER: Request info ──────────────────── */
 
   const handleRequestInfo = async () => {
     if (!requestInfoModal.message.trim()) { toast.error('Please enter a message'); return; }
 
     setSubmitting(true);
-    const { token } = getAuth();
 
     try {
-      const res = await fetch(`${API_BASE}/api/manager/disputes/${requestInfoModal.disputeId}/request-info`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-          'X-User-Id': userId, // Gửi ID của Manager
-        },
-        body: JSON.stringify({ message: requestInfoModal.message }),
-      });
-
-      if (!res.ok) throw new Error('Failed to send request');
+      await apiPost(
+        'dispute',
+        `/api/manager/disputes/${encodeURIComponent(requestInfoModal.disputeId)}/request-info`,
+        { message: requestInfoModal.message },
+        { withUserId: false, headers: { 'X-User-Id': userId } }
+      );
       toast.success('Information request sent to customer!');
       setRequestInfoModal({ isOpen: false, disputeId: '', message: '' });
       fetchDisputes();
-    } catch (err: any) {
-      toast.error(err.message || 'Failed to send request');
+    } catch (err) {
+      if (!handleSessionExpired(err)) {
+        toast.error(getUserFacingErrorMessage(err, { defaultMessage: 'Failed to send request.' }));
+      }
     } finally {
       setSubmitting(false);
     }
   };
-
-  /* ──────────────────── MANAGER: Resolve ──────────────────── */
 
   const handleResolve = async () => {
     if (!resolveModal.resolutionSummary.trim()) { toast.error('Please provide a resolution summary'); return; }
@@ -163,7 +150,6 @@ export default function DisputesTab({ userId, shopId }: DisputesTabProps) {
     }
 
     setSubmitting(true);
-    const { token } = getAuth();
 
     try {
       const body: any = {
@@ -174,28 +160,23 @@ export default function DisputesTab({ userId, shopId }: DisputesTabProps) {
         body.refundAmount = resolveModal.refundAmount;
       }
 
-      const res = await fetch(`${API_BASE}/api/manager/disputes/${resolveModal.disputeId}/resolve`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-          'X-User-Id': userId, // Gửi ID của Manager
-        },
-        body: JSON.stringify(body),
-      });
-
-      if (!res.ok) throw new Error('Failed to resolve dispute');
+      await apiPost(
+        'dispute',
+        `/api/manager/disputes/${encodeURIComponent(resolveModal.disputeId)}/resolve`,
+        body,
+        { withUserId: false, headers: { 'X-User-Id': userId } }
+      );
       toast.success(`Dispute ${resolveModal.resolutionType.toLowerCase()}!`);
       setResolveModal({ isOpen: false, disputeId: '', resolutionType: 'APPROVED', resolutionSummary: '', refundAmount: 0 });
       fetchDisputes();
-    } catch (err: any) {
-      toast.error(err.message || 'Failed to resolve dispute');
+    } catch (err) {
+      if (!handleSessionExpired(err)) {
+        toast.error(getUserFacingErrorMessage(err, { defaultMessage: 'Failed to resolve dispute.' }));
+      }
     } finally {
       setSubmitting(false);
     }
   };
-
-  /* ──────────────────── Toggle expand ──────────────────── */
 
   const toggleExpand = (disputeId: string) => {
     if (expandedId === disputeId) {
@@ -205,8 +186,6 @@ export default function DisputesTab({ userId, shopId }: DisputesTabProps) {
       fetchDisputeDetail(disputeId);
     }
   };
-
-  /* ──────────────────── Render helpers ──────────────────── */
 
   const StatusBadge = ({ status }: { status: string }) => {
     const config = STATUS_CONFIG[status] || STATUS_CONFIG.PENDING;
@@ -231,11 +210,8 @@ export default function DisputesTab({ userId, shopId }: DisputesTabProps) {
     return DISPUTE_REASONS.find(r => r.value === reason)?.label || reason;
   };
 
-  /* ──────────────────── RENDER ──────────────────── */
-
   return (
     <div className="space-y-6">
-      {/* ── Header ──────────────────────────────────────────────── */}
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-black text-slate-900 flex items-center gap-2">
@@ -248,14 +224,12 @@ export default function DisputesTab({ userId, shopId }: DisputesTabProps) {
         </div>
       </div>
 
-      {/* ── Loading ──────────────────────────────────────────────── */}
       {loading && (
         <div className="flex items-center justify-center py-20">
           <Loader2 size={32} className="animate-spin text-cyan-600" />
         </div>
       )}
 
-      {/* ── Empty state ──────────────────────────────────────────── */}
       {!loading && disputes.length === 0 && (
         <div className="bg-white border border-slate-200 rounded-2xl p-12 text-center shadow-sm">
           <Scale size={48} className="mx-auto text-slate-300 mb-4" />
@@ -266,7 +240,6 @@ export default function DisputesTab({ userId, shopId }: DisputesTabProps) {
         </div>
       )}
 
-      {/* ── Disputes list ────────────────────────────────────────── */}
       {!loading && disputes.length > 0 && (
         <div className="space-y-3">
           {disputes.map(dispute => {
@@ -278,7 +251,6 @@ export default function DisputesTab({ userId, shopId }: DisputesTabProps) {
                 key={dispute.disputeId}
                 className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden transition-all"
               >
-                {/* ── Row header ── */}
                 <button
                   onClick={() => toggleExpand(dispute.disputeId)}
                   className="w-full flex items-center justify-between px-6 py-4 hover:bg-slate-50/50 transition-colors text-left"
@@ -307,10 +279,8 @@ export default function DisputesTab({ userId, shopId }: DisputesTabProps) {
                   </div>
                 </button>
 
-                {/* ── Expanded detail ── */}
                 {isExpanded && (
                   <div className="border-t border-slate-100 px-6 py-5 space-y-5 bg-slate-50/30">
-                    {/* Info grid */}
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                       <DetailField label="Dispute ID" value={dispute.disputeId} />
                       <DetailField label="Order ID" value={dispute.orderId} />
@@ -326,7 +296,6 @@ export default function DisputesTab({ userId, shopId }: DisputesTabProps) {
                       )}
                     </div>
 
-                    {/* Description */}
                     <div>
                       <p className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-1.5">Customer Description</p>
                       <p className="text-sm text-slate-700 bg-white border border-slate-200 rounded-xl px-4 py-3">
@@ -334,7 +303,6 @@ export default function DisputesTab({ userId, shopId }: DisputesTabProps) {
                       </p>
                     </div>
 
-                    {/* Resolution summary */}
                     {dispute.resolutionSummary && (
                       <div>
                         <p className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-1.5">Resolution Summary</p>
@@ -344,7 +312,6 @@ export default function DisputesTab({ userId, shopId }: DisputesTabProps) {
                       </div>
                     )}
 
-                    {/* Evidence list */}
                     {dispute.evidenceList && dispute.evidenceList.length > 0 && (
                       <div>
                         <p className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-2">
@@ -387,7 +354,6 @@ export default function DisputesTab({ userId, shopId }: DisputesTabProps) {
                       </div>
                     )}
 
-                    {/* MANAGER: Action buttons */}
                     {canManagerAct && (
                       <div className="flex items-center gap-3 pt-4 border-t border-slate-200 mt-4">
                         <button
@@ -414,7 +380,6 @@ export default function DisputesTab({ userId, shopId }: DisputesTabProps) {
         </div>
       )}
 
-      {/* ── Manager: Request Info Modal ───────────────────────────── */}
       {requestInfoModal.isOpen && (
         <ModalOverlay onClose={() => setRequestInfoModal({ isOpen: false, disputeId: '', message: '' })}>
           <h3 className="text-lg font-black text-slate-800 mb-4 flex items-center gap-2">
@@ -451,7 +416,6 @@ export default function DisputesTab({ userId, shopId }: DisputesTabProps) {
         </ModalOverlay>
       )}
 
-      {/* ── Manager: Resolve Modal ───────────────────────────────── */}
       {resolveModal.isOpen && (
         <ModalOverlay onClose={() => setResolveModal({ isOpen: false, disputeId: '', resolutionType: 'APPROVED', resolutionSummary: '', refundAmount: 0 })}>
           <h3 className="text-lg font-black text-slate-800 mb-4 flex items-center gap-2">
@@ -459,7 +423,6 @@ export default function DisputesTab({ userId, shopId }: DisputesTabProps) {
             Resolve Dispute
           </h3>
 
-          {/* Resolution type */}
           <div className="mb-4">
             <label className="block text-sm font-bold text-slate-600 mb-2">Final Decision</label>
             <div className="flex gap-3">
@@ -490,7 +453,6 @@ export default function DisputesTab({ userId, shopId }: DisputesTabProps) {
             </div>
           </div>
 
-          {/* Refund amount (only if APPROVED) */}
           {resolveModal.resolutionType === 'APPROVED' && (
             <div className="mb-4">
               <label className="block text-sm font-bold text-slate-600 mb-1.5">Refund Amount ($)</label>
@@ -506,7 +468,6 @@ export default function DisputesTab({ userId, shopId }: DisputesTabProps) {
             </div>
           )}
 
-          {/* Resolution summary */}
           <div className="mb-5">
             <label className="block text-sm font-bold text-slate-600 mb-1.5">Resolution Summary *</label>
             <textarea
@@ -544,8 +505,6 @@ export default function DisputesTab({ userId, shopId }: DisputesTabProps) {
   );
 }
 
-/* ──────────────────────────── Sub-components ──────────────────── */
-
 function DetailField({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div>
@@ -558,9 +517,7 @@ function DetailField({ label, value }: { label: string; value: React.ReactNode }
 function ModalOverlay({ children, onClose }: { children: React.ReactNode; onClose: () => void }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      {/* Backdrop */}
       <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
-      {/* Content */}
       <div className="relative w-full max-w-lg bg-white rounded-2xl shadow-2xl p-6 animate-in fade-in zoom-in-95 duration-200">
         <button
           onClick={onClose}

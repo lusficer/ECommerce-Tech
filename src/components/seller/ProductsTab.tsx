@@ -1,4 +1,3 @@
-// ===== src/components/seller/ProductsTab.tsx =====
 'use client';
 
 import React from 'react';
@@ -55,7 +54,6 @@ export default function ProductsTab({
             )}
             {products.map((p) => (
               <tr key={p.productId} className="border-b border-slate-50 hover:bg-slate-50 transition-colors">
-                {/* Product name + image */}
                 <td className="py-4 px-4">
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 bg-slate-100 rounded-lg overflow-hidden shrink-0 border border-slate-200">

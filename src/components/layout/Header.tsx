@@ -1,4 +1,3 @@
-// ===== src/components/layout/Header.tsx =====
 'use client';
 
 import React, { useState, useEffect } from 'react';
@@ -10,59 +9,48 @@ import {
 import SearchBar from './SearchBar';
 import CategoryMegaMenu from './CategoryMegaMenu';
 import WishlistIcon from './WishlistIcon';
+import NotificationBell from './NotificationBell';
 import CartIcon from './CartIcon';
 import UserMenu from './UserMenu';
+
+import { apiGet } from '@/lib/api';
 
 export default function Header() {
   const [shops, setShops]                   = useState<any[]>([]);
   const [loadingShops, setLoadingShops]     = useState(false);
   const [showShopDropdown, setShowShopDropdown] = useState(false);
 
-  // Fetch shops for the Shops nav dropdown
+  // Preload a small shop list for the header dropdown.
   useEffect(() => {
     (async () => {
       setLoadingShops(true);
       try {
-        const token =
-          (typeof window !== 'undefined' &&
-            (localStorage.getItem('accessToken') || localStorage.getItem('token'))) || '';
-        const res = await fetch('http://localhost:8082/api/shops', {
-          headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-        });
-        if (res.ok) setShops((await res.json()).slice(0, 8));
+        const data = await apiGet<any[]>('shop', '/api/shops', { withUserId: false });
+        setShops((data ?? []).slice(0, 8));
       } catch {} finally { setLoadingShops(false); }
     })();
   }, []);
 
   return (
     <header className="w-full bg-white border-b border-slate-200 font-sans sticky top-0 z-50 shadow-sm">
-
-      {/* ── Top utility bar ───────────────────────────────────────────────────── */}
       <div className="hidden md:flex justify-between items-center px-4 lg:px-8 bg-slate-50 border-b border-slate-200 text-sm font-medium text-slate-600">
         <div className="flex items-center divide-x divide-slate-300 border-l border-slate-300">
           <Link href="/seller"  className="px-5 py-2 hover:text-cyan-600 hover:bg-slate-200/50 transition-all">Seller Centre</Link>
           <Link href="/orders"  className="px-5 py-2 hover:text-cyan-600 hover:bg-slate-200/50 transition-all border-r border-slate-300">Order Tracking</Link>
         </div>
       </div>
-
-      {/* ── Main row: logo + search + icons ──────────────────────────────────── */}
       <div className="px-4 lg:px-8 py-4 flex items-center justify-between gap-4 md:gap-8 border-b border-slate-100">
-        {/* Logo */}
         <Link href="/" className="flex items-center shrink-0 group">
           <div className="flex items-center font-rubik tracking-tighter">
             <span className="text-2xl md:text-3xl font-black text-slate-900">Tech</span>
             <span className="text-2xl md:text-3xl font-black text-cyan-600 drop-shadow-[0_1.2px_1.2px_rgba(0,0,0,0.1)]">Stone</span>
           </div>
         </Link>
-
-        {/* Search */}
         <SearchBar />
-
-        {/* Right icons */}
         <div className="flex items-center gap-5 shrink-0">
-
-
           <WishlistIcon />
+
+          <NotificationBell />
 
           <div className="h-8 w-px bg-slate-200 hidden md:block mx-1" />
 
@@ -71,8 +59,6 @@ export default function Header() {
           <CartIcon />
         </div>
       </div>
-
-      {/* ── Bottom nav: categories + links ───────────────────────────────────── */}
       <div className="hidden md:flex px-4 lg:px-8 py-0 items-center gap-8 border-t border-slate-100">
         <CategoryMegaMenu />
 
@@ -82,8 +68,6 @@ export default function Header() {
           <Link href="/products" className="flex items-center gap-1.5 hover:text-cyan-600 transition-colors">
             <Package size={18} className="text-cyan-600" /> Products
           </Link>
-
-          {/* Shops dropdown */}
           <div
             className="relative h-full flex items-center"
             onMouseEnter={() => setShowShopDropdown(true)}

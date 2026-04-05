@@ -4,6 +4,8 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
+import { apiGet, apiPut } from '@/lib/api';
+import type { ShipperAvailableOrderDTO, OrderAddress } from '@/types';
 import { 
   Truck, MapPin, Phone, User, CheckCircle2, 
   XCircle, Loader2, ChevronLeft, Package, Clock, Navigation, X
@@ -41,32 +43,28 @@ export default function ShipperOrdersPage() {
     }
 
     setShipperId(storedUserId);
-    fetchOrders(storedUserId, activeTab, token);
+    fetchOrders(storedUserId, activeTab);
   }, [activeTab, router]);
 
-  const fetchOrders = async (sId: string, tab: string, token: string) => {
+  const fetchOrders = async (sId: string, tab: string) => {
     setLoading(true);
     try {
-      let endpoint = '';
       if (tab === 'AVAILABLE') {
-        endpoint = `http://localhost:8086/api/shipper/orders/available`;
+        const data = await apiGet<ShipperAvailableOrderDTO[]>('order', '/api/shipper/orders/available', {
+          withUserId: true,
+          headers: { userId: sId },
+        });
+        setOrders(data);
       } else {
-        endpoint = `http://localhost:8086/api/shipper/orders/my-deliveries?status=${tab}`;
-      }
-
-      const res = await fetch(endpoint, {
-        headers: { 
-          'Authorization': `Bearer ${token}`,
-          'userId': sId
-        }
-      });
-      
-      if (res.ok) {
-        const data = await res.json();
+        const data = await apiGet<any[]>('order', `/api/shipper/orders/my-deliveries?status=${tab}`, {
+          withUserId: true,
+          headers: { userId: sId },
+        });
         setOrders(data);
       }
-    } catch (err) {
-      toast.error('Cannot fetch orders');
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Cannot fetch orders';
+      toast.error(message);
     } finally {
       setLoading(false);
     }
@@ -74,26 +72,17 @@ export default function ShipperOrdersPage() {
 
   const handleAcceptOrder = async (orderId: string) => {
     setActionLoadingId(orderId);
-    const token = localStorage.getItem('accessToken');
-
     try {
-      const res = await fetch(`http://localhost:8086/api/shipper/orders/${orderId}/accept`, {
-        method: 'PUT',
-        headers: { 
-          'Authorization': `Bearer ${token}`,
-          'userId': shipperId
-        }
+      await apiPut('order', `/api/shipper/orders/${orderId}/accept`, undefined, {
+        withUserId: true,
+        headers: { userId: shipperId },
       });
-
-      if (res.ok) {
-        toast.success('Successfully accepted the order!');
-        fetchOrders(shipperId, activeTab, token!);
-      } else {
-        const err = await res.json();
-        toast.error(err.message || 'Cannot accept this order.');
-      }
-    } catch (err) {
-      toast.error('Server error.');
+      toast.success('Successfully accepted the order!');
+      // Immediately remove from the current list and switch to My Deliveries.
+      setOrders((prev) => prev.filter((o) => o?.orderId !== orderId));
+      setActiveTab('SHIPPING');
+    } catch (err: any) {
+      toast.error(err?.message || 'Cannot accept this order.');
     } finally {
       setActionLoadingId(null);
     }
@@ -106,32 +95,19 @@ export default function ShipperOrdersPage() {
     }
 
     setActionLoadingId(updateModal.orderId);
-    const token = localStorage.getItem('accessToken');
-
     try {
-      const res = await fetch(`http://localhost:8086/api/shipper/orders/${updateModal.orderId}/status`, {
-        method: 'PUT',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-          'userId': shipperId
-        },
-        body: JSON.stringify({
-          status: updateModal.status,
-          note: updateModal.note || 'Delivered successfully'
-        })
-      });
+      await apiPut(
+        'order',
+        `/api/shipper/orders/${updateModal.orderId}/status`,
+        { status: updateModal.status, note: updateModal.note || 'Delivered successfully' },
+        { withUserId: true, headers: { userId: shipperId } }
+      );
 
-      if (res.ok) {
-        toast.success('Order status updated successfully!');
-        setUpdateModal({ isOpen: false, orderId: '', status: 'DELIVERED', note: '' });
-        fetchOrders(shipperId, activeTab, token!);
-      } else {
-        const err = await res.json();
-        toast.error(err.message || 'Failed to update status.');
-      }
-    } catch (err) {
-      toast.error('Server connection error.');
+      toast.success('Order status updated successfully!');
+      setUpdateModal({ isOpen: false, orderId: '', status: 'DELIVERED', note: '' });
+      fetchOrders(shipperId, activeTab);
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to update status.');
     } finally {
       setActionLoadingId(null);
     }
@@ -139,6 +115,45 @@ export default function ShipperOrdersPage() {
 
   const openUpdateModal = (orderId: string) => {
     setUpdateModal({ isOpen: true, orderId, status: 'DELIVERED', note: '' });
+  };
+
+  const formatAddressText = (a?: Partial<OrderAddress> | null) => {
+    if (!a) return 'N/A';
+    const parts = [a.addressLine, a.ward, a.district, a.city].filter(Boolean);
+    return parts.length ? parts.join(', ') : 'N/A';
+  };
+
+  const buildAddress = (addr: Partial<OrderAddress> | undefined) => ({
+    addressLine: addr?.addressLine || '',
+    ward: addr?.ward || '',
+    district: addr?.district || '',
+    city: addr?.city || '',
+    phone: (addr as any)?.phone || '',
+    fullName: (addr as any)?.fullName || '',
+  });
+
+  const extractPickupDelivery = (order: any) => {
+    const deliveryObj: Partial<OrderAddress> | undefined =
+      order.deliveryAddress && typeof order.deliveryAddress === 'object'
+        ? order.deliveryAddress
+        : (order.orderAddress || order.shippingAddress);
+
+    const delivery = buildAddress(deliveryObj);
+    if (!delivery.phone) delivery.phone = order.deliveryPhone || '';
+    if (!delivery.addressLine) delivery.addressLine = order.deliveryAddress || '';
+    if (!delivery.city) delivery.city = order.deliveryCity || '';
+    if (!delivery.district) delivery.district = order.deliveryDistrict || '';
+    if (!delivery.ward) delivery.ward = order.deliveryWard || '';
+
+    const pickup: Partial<OrderAddress> = {
+      addressLine: order.pickupAddress || '',
+      city: order.pickupCity || '',
+      district: order.pickupDistrict || '',
+      ward: order.pickupWard || '',
+      phone: order.pickupPhone || '',
+    };
+
+    return { pickup, delivery };
   };
 
   return (
@@ -186,8 +201,12 @@ export default function ShipperOrdersPage() {
         ) : (
           <div className="space-y-6">
             {orders.map((order) => {
-              const address = order.orderAddress || {};
+              const legacyAddress = (order.orderAddress || order.shippingAddress || {}) as Partial<OrderAddress>;
+              const { pickup, delivery } = extractPickupDelivery(order);
               const isActionLoading = actionLoadingId === order.orderId;
+
+              const recipientName = (legacyAddress as any).fullName || order.userId || 'Customer';
+              const recipientPhone = (legacyAddress as any).phone || (delivery as any).phone || order.deliveryPhone || 'No phone';
 
               return (
                 <div key={order.orderId} className={`bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden ${isActionLoading ? 'opacity-50 pointer-events-none' : ''}`}>
@@ -210,28 +229,59 @@ export default function ShipperOrdersPage() {
                       <div className="flex items-start gap-3">
                         <User className="w-5 h-5 text-slate-400 shrink-0 mt-0.5" />
                         <div>
-                          <p className="text-sm font-bold text-slate-900">{address.fullName || order.userId}</p>
+                          <p className="text-sm font-bold text-slate-900">{recipientName}</p>
                           <p className="text-sm text-slate-500 flex items-center gap-1 mt-1">
-                            <Phone className="w-3.5 h-3.5" /> {address.phone || 'No phone'}
+                            <Phone className="w-3.5 h-3.5" /> {recipientPhone}
                           </p>
                         </div>
                       </div>
-                      <div className="flex items-start gap-3">
-                        <MapPin className="w-5 h-5 text-slate-400 shrink-0 mt-0.5" />
-                        <div className="flex-1">
-                          <p className="text-sm text-slate-700 font-medium leading-relaxed">
-                            {address.addressLine}, {address.ward}, {address.district}, {address.city}
-                          </p>
+                      {activeTab === 'AVAILABLE' ? (
+                        <div className="space-y-3">
+                          <div className="p-4 rounded-2xl border border-slate-200 bg-slate-50">
+                            <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-2">📦 Pickup at:</p>
+                            <p className="text-sm text-slate-700 font-medium leading-relaxed">{formatAddressText(pickup)}</p>
+                            {(pickup as any).phone && (
+                              <p className="text-xs text-slate-500 mt-2 flex items-center gap-1">
+                                <Phone className="w-3.5 h-3.5" /> {(pickup as any).phone}
+                              </p>
+                            )}
+                          </div>
+
+                          <div className="flex items-start gap-3">
+                            <MapPin className="w-5 h-5 text-slate-400 shrink-0 mt-0.5" />
+                            <div className="flex-1">
+                              <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-2">📍 Deliver to:</p>
+                              <p className="text-sm text-slate-700 font-medium leading-relaxed">{formatAddressText(delivery)}</p>
+                            </div>
+                            <a
+                              href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(formatAddressText(delivery))}`}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="p-2 bg-blue-50 text-blue-600 rounded-xl hover:bg-blue-100 shrink-0 transition-colors"
+                              title="Open in Google Maps"
+                            >
+                              <Navigation className="w-5 h-5" />
+                            </a>
+                          </div>
                         </div>
-                        <a 
-                          href={`https://www.google.com/maps/search/?api=1&query=...?q=${encodeURIComponent(`${address.addressLine || ''}, ${address.ward || ''}, ${address.district || ''}, ${address.city || ''}`)}`}
-                          target="_blank" rel="noreferrer"
-                          className="p-2 bg-blue-50 text-blue-600 rounded-xl hover:bg-blue-100 shrink-0 transition-colors"
-                          title="Open in Google Maps"
-                        >
-                          <Navigation className="w-5 h-5" />
-                        </a>
-                      </div>
+                      ) : (
+                        <div className="flex items-start gap-3">
+                          <MapPin className="w-5 h-5 text-slate-400 shrink-0 mt-0.5" />
+                          <div className="flex-1">
+                            <p className="text-sm text-slate-700 font-medium leading-relaxed">
+                              {formatAddressText(legacyAddress as any)}
+                            </p>
+                          </div>
+                          <a
+                            href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(formatAddressText(legacyAddress as any))}`}
+                            target="_blank" rel="noreferrer"
+                            className="p-2 bg-blue-50 text-blue-600 rounded-xl hover:bg-blue-100 shrink-0 transition-colors"
+                            title="Open in Google Maps"
+                          >
+                            <Navigation className="w-5 h-5" />
+                          </a>
+                        </div>
+                      )}
                     </div>
 
                     <div className="flex flex-col justify-end gap-3 border-t md:border-t-0 md:border-l border-slate-100 pt-4 md:pt-0 md:pl-6">

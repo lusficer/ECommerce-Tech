@@ -1,10 +1,10 @@
-// ===== src/components/layout/WishlistIcon.tsx =====
 'use client';
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { Heart } from 'lucide-react';
 import { getAuth } from '@/lib/auth';
+import { apiGet } from '@/lib/api';
 import { getSalePrice } from '@/lib/format';
 
 export default function WishlistIcon() {
@@ -13,21 +13,24 @@ export default function WishlistIcon() {
 
   const fetchWishlist = async () => {
     const { token, userId } = getAuth();
-    if (!token) return;
+    if (!token || !userId) {
+      setCount(0);
+      setPreview([]);
+      return;
+    }
     try {
-      const res = await fetch(`http://localhost:8081/api/wishlists/${userId}`, {
-        headers: { Authorization: `Bearer ${token}` },
-        cache: 'no-store',
-      });
-      if (!res.ok) return;
-      const data = await res.json();
+      const data = await apiGet<any[]>('user', `/api/wishlists/${userId}`, { withUserId: false });
       setCount(data.length);
 
       const top = data.slice(0, 3);
       if (top.length > 0) {
         const ids = top.map((i: any) => i.productId).join(',');
-        const pr = await fetch(`http://localhost:8083/api/internal/products/batch?ids=${ids}`);
-        if (pr.ok) setPreview(await pr.json());
+        const products = await apiGet<any[]>(
+          'product',
+          `/api/internal/products/batch?ids=${ids}`,
+          { withAuth: false, withUserId: false }
+        );
+        setPreview(products ?? []);
       } else {
         setPreview([]);
       }
@@ -37,7 +40,13 @@ export default function WishlistIcon() {
   useEffect(() => {
     fetchWishlist();
     window.addEventListener('wishlistUpdated', fetchWishlist);
-    return () => window.removeEventListener('wishlistUpdated', fetchWishlist);
+    window.addEventListener('authUpdated', fetchWishlist);
+    window.addEventListener('storage', fetchWishlist);
+    return () => {
+      window.removeEventListener('wishlistUpdated', fetchWishlist);
+      window.removeEventListener('authUpdated', fetchWishlist);
+      window.removeEventListener('storage', fetchWishlist);
+    };
   }, []);
 
   return (
@@ -51,8 +60,6 @@ export default function WishlistIcon() {
             </span>
           )}
         </Link>
-
-        {/* Hover preview */}
         <div className="absolute top-full right-0 w-80 bg-white border border-slate-200 shadow-2xl rounded-2xl overflow-hidden opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-300 z-50 transform origin-top-right scale-95 group-hover:scale-100">
           <div className="p-4 border-b border-slate-100 bg-slate-50 flex justify-between items-center">
             <h4 className="font-bold text-slate-900 text-sm">Recently Saved</h4>

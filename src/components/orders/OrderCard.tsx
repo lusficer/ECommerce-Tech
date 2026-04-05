@@ -1,4 +1,3 @@
-// ===== src/components/orders/OrderCard.tsx =====
 'use client';
 
 import React from 'react';
@@ -32,8 +31,9 @@ function getStatusInfo(status: string) {
     case 'SHIPPING':
       return { color: 'text-purple-600', icon: Truck, label: 'Shipping' };
     case 'DELIVERED':
+      return { color: 'text-green-600', icon: CheckCircle2, label: 'Delivered' };
     case 'COMPLETED':
-      return { color: 'text-green-600', icon: CheckCircle2, label: 'Completed' };
+      return { color: 'text-teal-600', icon: CheckCircle2, label: 'Complete' };
     case 'DISPUTED':
       return { color: 'text-orange-600', icon: Scale, label: 'Disputed' };
     case 'CANCELLED':
@@ -55,13 +55,12 @@ export default function OrderCard({
   const StatusIcon = statusInfo.icon;
   const canCancel = ['NEW', 'PENDING_VERIFICATION'].includes(order.orderStatus);
   const canConfirm = order.orderStatus === 'DELIVERED';
-  const canReview  = ['DELIVERED', 'COMPLETED'].includes(order.orderStatus);
+  const canReview  = ['DELIVERED', 'COMPLETE', 'COMPLETED'].includes(order.orderStatus);
   const hasDispute = Boolean(order.latestDispute);
   const canDispute = canFileDispute(order.orderStatus, order.latestDispute);
 
   return (
     <div className={`bg-white border border-slate-200 shadow-sm overflow-hidden hover:shadow-md transition-shadow ${isActionLoading ? 'opacity-50 pointer-events-none' : ''}`}>
-      {/* Header */}
       <div className="px-6 py-3 border-b border-slate-100 flex items-center justify-between bg-slate-50/30">
         <div className="flex items-center gap-2">
           <Store className="w-4 h-4 text-slate-600" />
@@ -84,7 +83,6 @@ export default function OrderCard({
         </div>
       )}
 
-      {/* Items preview */}
       <div className="p-6 cursor-pointer" onClick={() => router.push(`/orders/${order.orderId}`)}>
         <div className="space-y-4">
           {order.orderItems?.slice(0, 2).map((item: any, idx: number) => (
@@ -117,7 +115,6 @@ export default function OrderCard({
         )}
       </div>
 
-      {/* Footer */}
       <div className="px-6 py-4 border-t border-slate-100 bg-slate-50/50 flex flex-col sm:flex-row items-end sm:items-center justify-between gap-4">
         <div className="flex items-center justify-end gap-2">
           <span className="text-sm text-slate-600 font-medium">Order Total:</span>

@@ -1,4 +1,3 @@
-// ===== src/components/layout/categoryMeta.ts =====
 // Static metadata for categories used in the mega-menu
 
 import {

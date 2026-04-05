@@ -15,8 +15,6 @@ export default function Home() {
         <FeaturedProducts />
         <FlashSale />
         <NewsletterStrip />
-        
-        {/* Component Gợi ý được thêm vào cuối */}
         <PersonalizedRecommendations />
       </main>
 

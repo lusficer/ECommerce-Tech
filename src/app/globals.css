@@ -6,4 +6,4 @@
   --font-mono: 'Rubik', sans-serif;
 }
 
-/* Xóa bỏ mọi cấu hình màu nền :root cũ để Tailwind tự do dùng bg-white và bg-slate-50 */
+/* Remove old :root background config so Tailwind can use bg-white/bg-slate-50 freely */

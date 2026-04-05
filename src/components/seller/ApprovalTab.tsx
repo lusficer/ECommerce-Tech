@@ -1,4 +1,3 @@
-// ===== src/components/seller/ApprovalTab.tsx =====
 'use client';
 
 import React from 'react';

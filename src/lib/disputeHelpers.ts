@@ -1,6 +1,6 @@
 import type { Dispute, DisputeStatus, OrderStatus } from '@/types';
 
-const DISPUTEABLE_ORDER_STATUSES: OrderStatus[] = ['DELIVERED', 'COMPLETED'];
+const DISPUTEABLE_ORDER_STATUSES: OrderStatus[] = ['DELIVERED', 'COMPLETE', 'COMPLETED'];
 
 export function normalizeDisputeStatus(status?: string): DisputeStatus {
   const normalized = (status || '').trim().toUpperCase();
@@ -49,6 +49,10 @@ export function getDisputeLabel(status?: string): string {
 
   if (!rawStatus) return '';
 
+  // Common pending/in-flight states
+  if (rawStatus === 'PENDING' || rawStatus === 'OPEN' || rawStatus === 'SUBMITTED' || rawStatus === 'IN_PROGRESS') {
+    return 'Dispute Pending';
+  }
   if (rawStatus === 'UNDER_REVIEW') return 'Dispute Under Review';
   if (rawStatus === 'WAITING_FOR_INFO') return 'Need More Information';
   if (rawStatus === 'APPROVED' || rawStatus === 'RESOLVED_APPROVED') return 'Dispute Approved';
@@ -57,5 +61,8 @@ export function getDisputeLabel(status?: string): string {
   const normalized = normalizeDisputeStatus(status);
   if (normalized === 'APPROVED') return 'Dispute Approved';
   if (normalized === 'REJECTED') return 'Dispute Rejected';
-  return 'NONE DISPUTE';
+  if (normalized === 'PENDING') return 'Dispute Pending';
+
+  // Fallback: show something meaningful rather than a misleading "NONE" label.
+  return `Dispute ${rawStatus.replace(/_/g, ' ')}`;
 }

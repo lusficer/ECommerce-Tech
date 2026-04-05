@@ -10,6 +10,8 @@ import {
 import toast from 'react-hot-toast';
 
 import ShopProfileSkeleton from '../../../components/skeleton/page'; 
+import { apiGet, apiPost, getUserFacingErrorMessage, isApiError } from '@/lib/api';
+import { logout } from '@/lib/auth';
 
 const CATEGORY_MAP: Record<string, string> = {
   'CAT_PHONE': 'Smartphones',
@@ -53,46 +55,54 @@ export default function ShopProfilePage() {
     const userId = localStorage.getItem('userId');
     
     if (!token) {
-      toast.error("Please login to view Shop details!");
+      toast.error('Please sign in to view shop details.');
       router.push(`/login?redirect=/seller/${shopId}`);
       return;
     }
 
+    const handleSessionExpired = (err: unknown): boolean => {
+      if (isApiError(err) && (err.status === 401 || err.status === 403)) {
+        logout();
+        toast.error('Your session has expired. Please sign in again.');
+        router.push(`/login?redirect=/seller/${shopId}`);
+        return true;
+      }
+      return false;
+    };
+
     const fetchShopData = async () => {
       setLoading(true);
       try {
-        const productsPromise = fetch(`http://localhost:8083/api/internal/products/shop/${shopId}`);
-        const profilePromise = fetch(`http://localhost:8082/api/shops/${shopId}`, {
-          method: 'GET',
-          headers: {
-            'Authorization': `Bearer ${token}`, 
-            'Content-Type': 'application/json'
-          }
-        }).catch(() => null); 
+        const productsPromise = apiGet<any[]>(
+          'product',
+          `/api/internal/products/shop/${encodeURIComponent(shopId)}`,
+          { withAuth: false, withUserId: false }
+        );
+        const profilePromise = apiGet<any>('shop', `/api/shops/${encodeURIComponent(shopId)}`);
+        const wishlistPromise = userId
+          ? apiGet<any[]>('user', `/api/wishlists/${encodeURIComponent(userId)}`, { withUserId: false })
+          : Promise.resolve(null);
 
-        let wishlistPromise: Promise<Response | null> = Promise.resolve(null);
-        if (userId) {
-          wishlistPromise = fetch(`http://localhost:8081/api/wishlists/${userId}`, {
-            headers: { 'Authorization': `Bearer ${token}` }
-          }).catch(() => null);
-        }
+        const [productsData, profileData, wishData] = await Promise.all([
+          productsPromise,
+          profilePromise,
+          wishlistPromise,
+        ]);
 
-        const [productsRes, profileRes, wishlistRes] = await Promise.all([productsPromise, profilePromise, wishlistPromise]);
+        if (productsData) {
+          setProducts(productsData || []);
+          setShopInfo((prev) => ({ ...prev, totalProducts: productsData.length || 0 }));
 
-        if (productsRes && productsRes.ok) {
-          const data = await productsRes.json();
-          setProducts(data || []);
-          setShopInfo(prev => ({ ...prev, totalProducts: data.length || 0 }));
-
-          if (data && data.length > 0) {
-            const uniqueCategoryIds = Array.from(new Set<string>(data.map((p: any) => String(p.categoryId))));
+          if (productsData.length > 0) {
+            const uniqueCategoryIds = Array.from(
+              new Set<string>(productsData.map((p: any) => String(p.categoryId)))
+            );
             const fetchedTabs = uniqueCategoryIds.map((id: string) => CATEGORY_MAP[id] || id);
-            setDynamicTabs(['All Products', ...fetchedTabs.sort()]); 
+            setDynamicTabs(['All Products', ...fetchedTabs.sort()]);
           }
         }
 
-        if (profileRes && profileRes.ok) {
-          const profileData = await profileRes.json();
+        if (profileData) {
           let formattedDate = 'Recently';
           const dateString = profileData.createdAt || profileData.createdDate; 
           
@@ -115,15 +125,16 @@ export default function ShopProfilePage() {
           }));
         }
 
-        if (wishlistRes && wishlistRes.ok) {
-           const wishData = await wishlistRes.json();
-           const wishSet = new Set<string>();
-           wishData.forEach((item: any) => wishSet.add(item.productId));
-           setWishlistItems(wishSet);
+        if (wishData) {
+          const wishSet = new Set<string>();
+          wishData.forEach((item: any) => wishSet.add(item.productId));
+          setWishlistItems(wishSet);
         }
 
       } catch (err) {
-        console.error("Error fetching data:", err);
+        if (handleSessionExpired(err)) return;
+        console.error('Error fetching data:', err);
+        toast.error(getUserFacingErrorMessage(err, { defaultMessage: 'Failed to load shop data.' }));
       } finally {
         setLoading(false);
       }
@@ -139,53 +150,62 @@ export default function ShopProfilePage() {
 
   const handleToggleWishlist = async (e: React.MouseEvent, productId: string, categoryId: string) => {
     e.stopPropagation();
-    const token = localStorage.getItem('accessToken') || localStorage.getItem('token');
     const userId = localStorage.getItem('userId');
 
-    if (!token || !userId) { toast.error("Please log in to save products!"); return; }
+    if (!userId) {
+      toast.error('Please sign in to save products.');
+      return;
+    }
 
     try {
       const isCurrentlyWishlisted = wishlistItems.has(productId);
-      const res = await fetch(`http://localhost:8081/api/wishlists/${userId}/${productId}`, {
-        method: 'POST', headers: { 'Authorization': `Bearer ${token}` }
+      await apiPost(
+        'user',
+        `/api/wishlists/${encodeURIComponent(userId)}/${encodeURIComponent(productId)}`,
+        undefined,
+        { withUserId: false }
+      );
+      setWishlistItems((prev) => {
+        const newSet = new Set(prev);
+        if (isCurrentlyWishlisted) newSet.delete(productId);
+        else newSet.add(productId);
+        return newSet;
       });
-
-      if (res.ok) {
-        setWishlistItems(prev => {
-          const newSet = new Set(prev);
-          if (isCurrentlyWishlisted) newSet.delete(productId);
-          else newSet.add(productId);
-          return newSet;
-        });
-        toast.success(isCurrentlyWishlisted ? "Removed from wishlist!" : "Added to wishlist!");
+      toast.success(isCurrentlyWishlisted ? 'Removed from wishlist!' : 'Added to wishlist!');
+    } catch (err) {
+      if (isApiError(err) && (err.status === 401 || err.status === 403)) {
+        logout();
+        toast.error('Your session has expired. Please sign in again.');
+        router.push(`/login?redirect=/seller/${shopId}`);
+        return;
       }
-    } catch (err) { toast.error("Server connection error!"); }
+      toast.error(getUserFacingErrorMessage(err, { defaultMessage: 'Failed to update wishlist.' }));
+    }
   };
 
   const handleAddToCart = async (e: React.MouseEvent, productId: string, categoryId: string) => {
     e.stopPropagation();
-    const token = localStorage.getItem('accessToken') || localStorage.getItem('token');
     const userId = localStorage.getItem('userId');
 
-    if (!token || !userId) { toast.error("Please login to add to cart!"); return; }
+    if (!userId) {
+      toast.error('Please sign in to add to cart.');
+      return;
+    }
 
     setIsAddingToCart(prev => ({ ...prev, [productId]: true }));
 
     try {
-      const res = await fetch(`http://localhost:8088/api/cart/add`, {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json', 'userId': userId },
-        body: JSON.stringify({ productId: productId, quantity: 1 })
-      });
-
-      if (!res.ok) {
-        toast.error("Error adding to cart!");
-      } else {
-        toast.success("Added to cart!");
-        window.dispatchEvent(new Event('cartUpdated'));
-      }
+      await apiPost('cart', '/api/cart/add', { productId: productId, quantity: 1 });
+      toast.success('Added to cart!');
+      window.dispatchEvent(new Event('cartUpdated'));
     } catch (err) {
-      toast.error("Cannot connect to the cart server.");
+      if (isApiError(err) && (err.status === 401 || err.status === 403)) {
+        logout();
+        toast.error('Your session has expired. Please sign in again.');
+        router.push(`/login?redirect=/seller/${shopId}`);
+        return;
+      }
+      toast.error(getUserFacingErrorMessage(err, { defaultMessage: 'Failed to add to cart.' }));
     } finally {
       setIsAddingToCart(prev => ({ ...prev, [productId]: false }));
     }

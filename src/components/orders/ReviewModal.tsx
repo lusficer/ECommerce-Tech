@@ -1,10 +1,10 @@
-// ===== src/components/orders/ReviewModal.tsx =====
 'use client';
 
 import React, { useState } from 'react';
 import { X, Star, Loader2, Image as ImageIcon } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { getAuth } from '@/lib/auth';
+import { getAuth, logout } from '@/lib/auth';
+import { apiPost, getUserFacingErrorMessage, isApiError } from '@/lib/api';
 
 interface ReviewTarget {
   orderId: string;
@@ -45,28 +45,32 @@ export default function ReviewModal({ target, onClose }: ReviewModalProps) {
     if (!rating) { toast.error('Please select a star rating'); return; }
     setSubmitting(true);
     const { token, userId } = getAuth();
+    if (!token || !userId) {
+      toast.error('Please sign in to submit a review.');
+      setSubmitting(false);
+      return;
+    }
     const userName = localStorage.getItem('fullName') || localStorage.getItem('username') || 'Valued Customer';
 
     try {
-      const res = await fetch(`http://localhost:8083/api/products/${target.productId}/reviews`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          userId: userId || '',
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ orderId: target.orderId, userName, rating, comment, images }),
-      });
-
-      if (res.ok) {
-        toast.success('Thank you! Your review has been submitted.');
-        onClose();
-      } else {
-        const err = await res.json();
-        toast.error(err.message || 'Failed to submit review');
+      await apiPost(
+        'product',
+        `/api/products/${target.productId}/reviews`,
+        { orderId: target.orderId, userName, rating, comment, images }
+      );
+      toast.success('Thank you! Your review has been submitted.');
+      onClose();
+    } catch (err) {
+      if (isApiError(err) && (err.status === 401 || err.status === 403)) {
+        logout();
+        toast.error('Your session has expired. Please sign in again.');
+        return;
       }
-    } catch {
-      toast.error('Connection error. Please try again.');
+      toast.error(
+        getUserFacingErrorMessage(err, {
+          defaultMessage: 'Failed to submit your review.',
+        })
+      );
     } finally {
       setSubmitting(false);
     }
@@ -77,7 +81,6 @@ export default function ReviewModal({ target, onClose }: ReviewModalProps) {
       <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={onClose} />
 
       <div className="relative bg-white rounded-3xl w-full max-w-lg overflow-hidden shadow-2xl animate-in fade-in zoom-in-95 duration-200">
-        {/* Header */}
         <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
           <h3 className="text-lg font-black text-slate-900">Rate Product</h3>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600 hover:bg-slate-200 p-1 rounded-full transition-colors">
@@ -85,9 +88,7 @@ export default function ReviewModal({ target, onClose }: ReviewModalProps) {
           </button>
         </div>
 
-        {/* Body */}
         <div className="p-6">
-          {/* Product preview */}
           <div className="flex items-center gap-4 mb-6 bg-slate-50 p-3 rounded-2xl border border-slate-100">
             <div className="w-16 h-16 bg-white rounded-xl border border-slate-200 p-1 flex shrink-0">
               <img src={target.productImage} alt="Product" className="w-full h-full object-contain" />
@@ -97,7 +98,6 @@ export default function ReviewModal({ target, onClose }: ReviewModalProps) {
             </p>
           </div>
 
-          {/* Stars */}
           <div className="flex flex-col items-center mb-6">
             <p className="text-sm font-bold text-slate-600 mb-2">Product Quality</p>
             <div className="flex items-center gap-2">
@@ -116,7 +116,6 @@ export default function ReviewModal({ target, onClose }: ReviewModalProps) {
             <p className="text-xs font-bold text-orange-500 mt-2">{RATING_LABELS[rating] || ''}</p>
           </div>
 
-          {/* Comment */}
           <div className="mb-4">
             <textarea
               rows={4}
@@ -127,7 +126,6 @@ export default function ReviewModal({ target, onClose }: ReviewModalProps) {
             />
           </div>
 
-          {/* Image upload */}
           <div>
             <div className="flex items-center gap-3 flex-wrap">
               {images.map((url, i) => (
@@ -153,7 +151,6 @@ export default function ReviewModal({ target, onClose }: ReviewModalProps) {
           </div>
         </div>
 
-        {/* Footer */}
         <div className="p-6 border-t border-slate-100 flex gap-3 bg-slate-50/50">
           <button
             onClick={onClose}

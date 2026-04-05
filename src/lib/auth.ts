@@ -1,15 +1,13 @@
-// ===== src/lib/auth.ts =====
-// Authentication utilities – read/write localStorage safely (SSR-safe)
+// Auth helpers with SSR-safe localStorage access
+
+import { apiGet } from '@/lib/api';
 
 export interface AuthData {
   token: string;
   userId: string;
 }
 
-/**
- * Returns the current auth token and userId from localStorage.
- * Returns null values when called server-side or when not logged in.
- */
+// SSR-safe: returns empty auth data when called server-side.
 export function getAuth(): AuthData {
   if (typeof window === 'undefined') {
     return { token: '', userId: '' };
@@ -20,45 +18,28 @@ export function getAuth(): AuthData {
   return { token, userId };
 }
 
-/**
- * Returns true if the user is currently authenticated.
- */
 export function isAuthenticated(): boolean {
   const { token, userId } = getAuth();
   return Boolean(token && userId);
 }
 
-/**
- * Returns the stored user role from localStorage.
- */
 export function getStoredRole(): string {
   if (typeof window === 'undefined') return '';
   return localStorage.getItem('role') || '';
 }
 
-/**
- * Fetches the user's role/status from the user service.
- * Used for role-based redirects (VENDOR / MANAGER / SHIPPER / CUSTOMER).
- */
+// Used for role-based routing; returns an empty role on errors.
 export async function getUserRole(userId: string): Promise<string> {
   const { token } = getAuth();
   if (!token) return '';
   try {
-    const res = await fetch(
-      `http://localhost:8081/api/account/status/${userId}`,
-      { headers: { Authorization: `Bearer ${token}` } }
-    );
-    if (!res.ok) return '';
-    const data = await res.json();
+    const data = await apiGet<any>('user', `/api/account/status/${userId}`, { withUserId: false });
     return data?.role || data?.profile?.role || '';
   } catch {
     return '';
   }
 }
 
-/**
- * Clears all auth data from localStorage.
- */
 export function logout(): void {
   if (typeof window === 'undefined') return;
   localStorage.removeItem('accessToken');
@@ -66,4 +47,10 @@ export function logout(): void {
   localStorage.removeItem('userId');
   localStorage.removeItem('userName');
   localStorage.removeItem('role');
+
+  // Notify any listeners (e.g., Header/UserMenu) to refresh.
+  window.dispatchEvent(new Event('authUpdated'));
+  // Also clear cross-page wishlist state.
+  window.dispatchEvent(new Event('wishlistUpdated'));
 }
+

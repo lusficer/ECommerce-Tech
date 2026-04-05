@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
 import { 
@@ -10,6 +10,9 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useAddToCart } from '@/hooks/useAddToCart';
+
+import { logout } from '@/lib/auth';
+import { apiGet, apiPost, getUserFacingErrorMessage, isApiError } from '@/lib/api';
 
 interface ProductInternalDto {
   productId: string;
@@ -59,6 +62,7 @@ export default function ProductDetailPage() {
 
   const [activeTab, setActiveTab] = useState<'description' | 'reviews'>('description');
   const [reviewFilter, setReviewFilter] = useState<number | 'ALL' | 'HAS_COMMENT'>('ALL');
+  const pageEnterTimeRef = useRef<number>(Date.now());
 
   useEffect(() => {
     if (!productId) { setLoading(false); return; }
@@ -69,65 +73,70 @@ export default function ProductDetailPage() {
     const fetchData = async () => {
       try {
         const cleanId = decodeURIComponent(productId);
-        const productRes = await fetch(`http://localhost:8083/api/internal/products/${cleanId}`);
-        
-        if (productRes.ok) {
-          const productData = await productRes.json();
-          setProduct(productData);
-          setShopName(productData.shopId); 
-          
-          if (productData.shopId) {
-            fetch(`http://localhost:8082/api/shops/${productData.shopId}`, {
-             method: 'GET',
-             headers: { 'Content-Type': 'application/json', ...(token ? { 'Authorization': `Bearer ${token}` } : {}) }
-            }).then(shopRes => shopRes.ok ? shopRes.json() : null)
-              .then(shopData => { if (shopData && (shopData.shopName || shopData.name)) setShopName(shopData.shopName || shopData.name); })
-              .catch(err => console.error("Error loading shop info:", err));
-          }
+        const productData = await apiGet<ProductInternalDto>(
+          'product',
+          `/api/internal/products/${cleanId}`,
+          { withAuth: false, withUserId: false }
+        );
+        setProduct(productData);
+        setShopName(productData.shopId);
 
-          if (token && productData.categoryId) {
-             fetch(`http://localhost:8090/api/recommendations/track`, { 
-               method: 'POST',
-               headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-               body: JSON.stringify({ 
-                 productId: cleanId, 
-                 categoryId: productData.categoryId, 
-                 actionType: 'VIEW' 
-               })
-             }).catch((err) => console.error("Error sending VIEW log:", err));
-          }
+        if (productData.shopId) {
+          apiGet<any>('shop', `/api/shops/${productData.shopId}`, { withUserId: false })
+            .then((shopData) => {
+              if (shopData && (shopData.shopName || shopData.name)) {
+                setShopName(shopData.shopName || shopData.name);
+              }
+            })
+            .catch((err) => console.error('Error loading shop info:', err));
+        }
 
-          if (productData.categoryId) {
-            fetch(`http://localhost:8083/api/internal/products/filter?categoryId=${productData.categoryId}&size=5`)
-              .then(res => res.ok ? res.json() : null)
-              .then(data => {
-                if (data && data.content) {
-                  const filtered = data.content.filter((p: any) => p.productId !== cleanId);
-                  setRelatedProducts(filtered.slice(0, 4));
-                }
-              }).catch(() => {});
-          }
+        if (token && productData.categoryId) {
+          apiPost(
+            'recommendation',
+            '/api/recommendations/track',
+            { productId: cleanId, categoryId: productData.categoryId, actionType: 'VIEW' },
+            { withUserId: false }
+          ).catch((err) => console.error('Error sending VIEW log:', err));
+        }
 
-          if (productData.brand) {
-            fetch(`http://localhost:8083/api/internal/products/filter?brand=${encodeURIComponent(productData.brand)}&size=10`)
-              .then(res => res.ok ? res.json() : null)
-              .then(data => {
-                if (data && data.content) {
-                  const filtered = data.content.filter((p: any) => p.productId !== cleanId && p.categoryId !== productData.categoryId);
-                  setFrequentlyBought(filtered.slice(0, 2)); 
-                }
-              }).catch(() => {});
-          }
+        if (productData.categoryId) {
+          apiGet<any>(
+            'product',
+            `/api/internal/products/filter?categoryId=${productData.categoryId}&size=5`,
+            { withAuth: false, withUserId: false }
+          )
+            .then((data) => {
+              if (data && data.content) {
+                const filtered = data.content.filter((p: any) => p.productId !== cleanId);
+                setRelatedProducts(filtered.slice(0, 4));
+              }
+            })
+            .catch(() => {});
+        }
+
+        if (productData.brand) {
+          apiGet<any>(
+            'product',
+            `/api/internal/products/filter?brand=${encodeURIComponent(productData.brand)}&size=10`,
+            { withAuth: false, withUserId: false }
+          )
+            .then((data) => {
+              if (data && data.content) {
+                const filtered = data.content.filter(
+                  (p: any) => p.productId !== cleanId && p.categoryId !== productData.categoryId
+                );
+                setFrequentlyBought(filtered.slice(0, 2));
+              }
+            })
+            .catch(() => {});
         }
 
         if (token && userId) {
-           const wishRes = await fetch(`http://localhost:8081/api/wishlists/${userId}/check/${cleanId}`, {
-             headers: { 'Authorization': `Bearer ${token}` }
-           });
-           if (wishRes.ok) {
-             const isLiked = await wishRes.json();
-             setIsWishlisted(isLiked);
-           }
+          const isLiked = await apiGet<boolean>('user', `/api/wishlists/${userId}/check/${cleanId}`, {
+            withUserId: false,
+          });
+          setIsWishlisted(Boolean(isLiked));
         }
 
         fetchReviews(cleanId);
@@ -139,49 +148,56 @@ export default function ProductDetailPage() {
       }
     };
 
+    pageEnterTimeRef.current = Date.now();
     fetchData();
-  }, [productId]);
+
+    // Track dwell time on page exit
+    return () => {
+      const dwellTimeMs = Date.now() - pageEnterTimeRef.current;
+      const token = localStorage.getItem('accessToken') || localStorage.getItem('token');
+      if (token && product?.productId && product?.categoryId && dwellTimeMs > 1000) {
+        apiPost(
+          'recommendation',
+          '/api/recommendations/track',
+          {
+            productId: product.productId,
+            categoryId: product.categoryId,
+            actionType: 'DWELL',
+            dwellTimeMs,
+          },
+          { withUserId: false }
+        ).catch(() => {});
+      }
+    };
+  }, [productId, product?.productId, product?.categoryId]);
 
   const fetchReviews = async (id: string) => {
-    const token = localStorage.getItem('accessToken') || localStorage.getItem('token');
-    const userId = localStorage.getItem('userId');
     try {
       setReviewsLoading(true);
-      const res = await fetch(`http://localhost:8083/api/products/${id}/reviews`, { 
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'userId': userId || '',
-          'Content-Type': 'application/json'
-        },
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setReviews(data);
+      const data = await apiGet<ReviewResponseDTO[]>(
+        'product',
+        `/api/products/${id}/reviews`
+      );
+      setReviews(data);
 
-        const uniqueUserIds = Array.from(new Set(data.map((r: any) => r.userId)));
-        const namesMap: Record<string, string> = {};
-        const token = localStorage.getItem('accessToken') || localStorage.getItem('token');
-        
-        await Promise.all(
-          uniqueUserIds.map(async (uid) => {
-            try {
-               const userRes = await fetch(`http://localhost:8081/api/account/status/${uid}`, {
-                 headers: {
-                   'Content-Type': 'application/json',
-                   ...(token ? { 'Authorization': `Bearer ${token}` } : {})
-                 }
-               });
-               if (userRes.ok) {
-                 const userData = await userRes.json();
-                 namesMap[uid as string] = userData.profile.name;
-               }
-            } catch (e) {
-               console.error(`Error fetching profile for user ${uid}`, e);
+      const uniqueUserIds = Array.from(new Set((data ?? []).map((r: any) => r.userId)));
+      const namesMap: Record<string, string> = {};
+
+      await Promise.all(
+        uniqueUserIds.map(async (uid) => {
+          try {
+            const userData = await apiGet<any>('user', `/api/account/status/${uid}`, {
+              withUserId: false,
+            });
+            if (userData?.profile?.name) {
+              namesMap[uid as string] = userData.profile.name;
             }
-          })
-        );
-        setReviewerNames(namesMap);
-      }
+          } catch (e) {
+            console.error(`Error fetching profile for user ${uid}`, e);
+          }
+        })
+      );
+      setReviewerNames(namesMap);
     } catch (err) {
       console.error("Failed to fetch reviews", err);
     } finally {
@@ -202,32 +218,36 @@ export default function ProductDetailPage() {
     const token = localStorage.getItem('accessToken') || localStorage.getItem('token');
     const userId = localStorage.getItem('userId');
 
-    if (!token || !userId) { toast.error("Please log in to save this product!"); return; }
+    if (!token || !userId) { toast.error('Please sign in to manage your wishlist.'); return; }
 
     try {
       const cleanId = decodeURIComponent(productId);
-      const res = await fetch(`http://localhost:8081/api/wishlists/${userId}/${cleanId}`, {
-        method: 'POST', headers: { 'Authorization': `Bearer ${token}` }
-      });
+      await apiPost('user', `/api/wishlists/${userId}/${cleanId}`, undefined, { withUserId: false });
 
-      if (res.ok) {
-        const newValue = !isWishlisted;
-        setIsWishlisted(newValue);
-        toast.success(newValue ? "Added to wishlist!" : "Removed from wishlist!");
-        window.dispatchEvent(new Event('wishlistUpdated'));
-        if (newValue && product?.categoryId) {
-          fetch(`http://localhost:8090/api/recommendations/track`, {
-            method: 'POST',
-            headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ 
-              productId: cleanId, 
-              categoryId: product.categoryId, 
-              actionType: 'WISHLIST' 
-            })
-          }).catch((err) => console.error("Error sending WISHLIST log:", err));
-        }
+      const newValue = !isWishlisted;
+      setIsWishlisted(newValue);
+      toast.success(newValue ? 'Added to wishlist!' : 'Removed from wishlist!');
+      window.dispatchEvent(new Event('wishlistUpdated'));
+      if (newValue && product?.categoryId) {
+        apiPost(
+          'recommendation',
+          '/api/recommendations/track',
+          { productId: cleanId, categoryId: product.categoryId, actionType: 'WISHLIST' },
+          { withUserId: false }
+        ).catch((err) => console.error('Error sending WISHLIST log:', err));
       }
-    } catch (err) { toast.error("Server connection error!"); }
+    } catch (err) {
+      if (isApiError(err) && (err.status === 401 || err.status === 403)) {
+        logout();
+        toast.error('Your session has expired. Please sign in again.');
+        return;
+      }
+      toast.error(
+        getUserFacingErrorMessage(err, {
+          defaultMessage: 'Failed to update your wishlist.',
+        })
+      );
+    }
   };
 
   const handleAddToCart = async () => {
@@ -236,46 +256,35 @@ export default function ProductDetailPage() {
     const cleanId = decodeURIComponent(productId);
 
     if (!token || !userId) {
-      toast.error("Please log in to add to cart!");
+      toast.error('Please sign in to add items to your cart.');
       return;
     }
 
     try {
-      const res = await fetch(`http://localhost:8088/api/cart/add`, {
-        method: 'POST',
-        headers: { 
-          'Authorization': `Bearer ${token}`, 
-          'Content-Type': 'application/json',
-          'userId': userId
-        },
-        body: JSON.stringify({ 
-          productId: cleanId,
-          quantity: currentQty
-        })
-      });
-
-      if (!res.ok) {
-        const errorText = await res.text();
-        toast.error(errorText || "Error adding to cart!");
-        return;
-      }
+      await apiPost('cart', '/api/cart/add', { productId: cleanId, quantity: currentQty });
 
       toast.success("Added to cart!");
       window.dispatchEvent(new Event('cartUpdated'));
 
       if (product?.categoryId) {
-         fetch(`http://localhost:8090/api/recommendations/track`, {
-           method: 'POST',
-           headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-           body: JSON.stringify({ 
-             productId: cleanId, 
-             categoryId: product.categoryId, 
-             actionType: 'ADD_TO_CART' 
-           })
-         }).catch(() => {});
+        apiPost(
+          'recommendation',
+          '/api/recommendations/track',
+          { productId: cleanId, categoryId: product.categoryId, actionType: 'ADD_TO_CART' },
+          { withUserId: false }
+        ).catch(() => {});
       }
     } catch (err) {
-      toast.error("Cannot connect to the cart server.");
+      if (isApiError(err) && (err.status === 401 || err.status === 403)) {
+        logout();
+        toast.error('Your session has expired. Please sign in again.');
+        return;
+      }
+      toast.error(
+        getUserFacingErrorMessage(err, {
+          defaultMessage: 'Failed to add item to cart.',
+        })
+      );
     }
   }
 
@@ -287,30 +296,13 @@ export default function ProductDetailPage() {
     const cleanId = decodeURIComponent(productId);
 
     if (!token || !userId) {
-      toast.error("Please log in to proceed to checkout!");
+      toast.error('Please sign in to proceed to checkout.');
       router.push('/login');
       return;
     }
 
     try {
-      const res = await fetch(`http://localhost:8088/api/cart/add`, {
-        method: 'POST',
-        headers: { 
-          'Authorization': `Bearer ${token}`, 
-          'Content-Type': 'application/json',
-          'userId': userId
-        },
-        body: JSON.stringify({ 
-          productId: cleanId,
-          quantity: currentQty
-        })
-      });
-
-      if (!res.ok) {
-        const errorText = await res.text();
-        toast.error(errorText || "Error processing your request!");
-        return;
-      }
+      await apiPost('cart', '/api/cart/add', { productId: cleanId, quantity: currentQty });
 
       const hasDiscount = product.discountPercentage > 0;
       const salePrice = hasDiscount ? product.price * (1 - product.discountPercentage / 100) : product.price;
@@ -331,7 +323,17 @@ export default function ProductDetailPage() {
       router.push('/checkout');
 
     } catch (err) {
-      toast.error("Cannot connect to server.");
+      if (isApiError(err) && (err.status === 401 || err.status === 403)) {
+        logout();
+        toast.error('Your session has expired. Please sign in again.');
+        router.push('/login');
+        return;
+      }
+      toast.error(
+        getUserFacingErrorMessage(err, {
+          defaultMessage: 'Unable to proceed to checkout right now.',
+        })
+      );
     }
   };
 

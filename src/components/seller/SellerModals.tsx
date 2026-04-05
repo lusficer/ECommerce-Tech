@@ -1,5 +1,4 @@
-// ===== src/components/seller/SellerModals.tsx =====
-// All 4 modals used by the Seller dashboard in one file to save tool calls.
+// Seller dashboard modals grouped in one file to keep imports simple.
 // Export: ProductReviewModal, DiscountModal, RejectModal, DeleteConfirmModal
 
 'use client';
@@ -9,7 +8,7 @@ import { X, Info, Loader2, Percent, AlertTriangle, Trash2, CheckCircle2 } from '
 import Modal from '@/components/ui/Modal';
 import { formatCurrency, getFirstImage } from '@/lib/format';
 
-// ─── 1. Product Review Modal ─────────────────────────────────────────────────
+// Product review modal.
 interface ProductReviewModalProps {
   product: any;
   saving: boolean;
@@ -25,7 +24,6 @@ export function ProductReviewModal({ product, saving, onClose, onApprove, onReje
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-slate-900/70 backdrop-blur-md animate-in fade-in duration-200">
       <div className="bg-white rounded-[2rem] shadow-2xl w-full max-w-5xl overflow-hidden animate-in zoom-in-95 duration-300 flex flex-col max-h-[90vh]">
-        {/* Header */}
         <div className="flex justify-between items-center p-6 md:p-8 border-b border-slate-100 bg-white shrink-0">
           <div>
             <h3 className="font-black text-slate-900 flex items-center gap-3 text-2xl">
@@ -38,9 +36,7 @@ export function ProductReviewModal({ product, saving, onClose, onApprove, onReje
           </button>
         </div>
 
-        {/* Body */}
         <div className="p-6 md:p-8 overflow-y-auto flex flex-col md:flex-row gap-8">
-          {/* Left: image */}
           <div className="w-full md:w-64 shrink-0">
             <div className="aspect-square bg-slate-50 rounded-2xl border border-slate-200 flex items-center justify-center p-6 overflow-hidden">
               <img src={img} alt={product.name} className="w-full h-full object-contain" />
@@ -65,7 +61,6 @@ export function ProductReviewModal({ product, saving, onClose, onApprove, onReje
             </div>
           </div>
 
-          {/* Right: details */}
           <div className="flex-1 min-w-0 space-y-6">
             <div>
               <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-2">Product Name</h4>
@@ -88,7 +83,6 @@ export function ProductReviewModal({ product, saving, onClose, onApprove, onReje
           </div>
         </div>
 
-        {/* Footer */}
         <div className="p-5 md:p-6 bg-white border-t border-slate-100 flex justify-end gap-4 shrink-0">
           <button
             disabled={saving}
@@ -111,7 +105,7 @@ export function ProductReviewModal({ product, saving, onClose, onApprove, onReje
   );
 }
 
-// ─── 2. Discount Modal ───────────────────────────────────────────────────────
+// Discount modal.
 interface DiscountModalProps {
   isOpen: boolean;
   productName: string;
@@ -162,7 +156,7 @@ export function DiscountModal({ isOpen, productName, discount, saving, onClose, 
   );
 }
 
-// ─── 3. Reject Modal ─────────────────────────────────────────────────────────
+// Reject modal.
 interface RejectModalProps {
   isOpen: boolean;
   productName: string;
@@ -205,7 +199,7 @@ export function RejectModal({ isOpen, productName, reason, saving, onClose, onRe
   );
 }
 
-// ─── 4. Delete Confirm Modal ─────────────────────────────────────────────────
+// Delete confirm modal.
 interface DeleteConfirmModalProps {
   isOpen: boolean;
   saving: boolean;

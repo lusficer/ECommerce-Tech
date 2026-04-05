@@ -1,11 +1,10 @@
-// ===== src/components/ui/LoadingScreen.tsx =====
 // Full-page loading spinner shown while data is being fetched
 
 import React from 'react';
 import { Loader2 } from 'lucide-react';
 
 interface LoadingScreenProps {
-  /** Tailwind color class for the spinner, default "text-cyan-600" */
+  // Tailwind color class for the spinner.
   color?: string;
 }
 

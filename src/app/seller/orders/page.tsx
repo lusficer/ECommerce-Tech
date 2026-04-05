@@ -3,6 +3,8 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
+import { apiGet, apiPut, getUserFacingErrorMessage, isApiError } from '@/lib/api';
+import { logout } from '@/lib/auth';
 import { 
   Package, Truck, Clock, 
   Search, Filter, Loader2, Store, ChevronRight, ChevronDown,
@@ -41,31 +43,32 @@ export default function VendorOrdersPage() {
 
   useEffect(() => {
     const fetchMyShops = async () => {
-      const token = localStorage.getItem('accessToken');
+      const token = localStorage.getItem('accessToken') || localStorage.getItem('token');
       if (!token) {
         router.push('/login');
         return;
       }
 
       try {
-        const res = await fetch(`http://localhost:8082/api/shops/my-assigned-shops`, {
-          headers: { 
-            'Authorization': `Bearer ${token}`,
-            'userId': vendorId 
-          }
+        const data = await apiGet<any[]>('shop', `/api/shops/my-assigned-shops`, {
+          withAuth: true,
+          withUserId: true,
         });
-        
-        if (res.ok) {
-          const data = await res.json();
-          setAssignedShops(data);
-          if (data.length > 0) {
-            setSelectedShopId(data[0].shopId);
-          } else {
-            toast.error("You have not been assigned to manage any Shop!");
-          }
+        setAssignedShops(data);
+        if (data.length > 0) {
+          setSelectedShopId(data[0].shopId);
+        } else {
+          toast.error('You have not been assigned to manage any shops.');
         }
       } catch (err) {
-        console.error("Error fetching shop list:", err);
+        if (isApiError(err) && (err.status === 401 || err.status === 403)) {
+          logout();
+          toast.error('Your session has expired. Please sign in again.');
+          router.push('/login');
+          return;
+        }
+        console.error('Error fetching shop list:', err);
+        toast.error(getUserFacingErrorMessage(err, { defaultMessage: 'Failed to load assigned shops.' }));
       } finally {
         setIsFetchingShops(false);
       }
@@ -82,29 +85,23 @@ export default function VendorOrdersPage() {
 
   const fetchVendorOrders = async (shopId: string, tab: string) => {
     setLoadingOrders(true);
-    const token = localStorage.getItem('accessToken');
     try {
-      let url = `http://localhost:8086/api/vendor/orders/${shopId}` ;
-      if (tab !== 'ALL') {
-        url += `?status=${tab}`;
-      }
-
-      const res = await fetch(url, {
-        headers: { 
-          'Authorization': `Bearer ${token}`,
-          'Vendor_Id': vendorId 
-        }
-      });
-      
-      if (res.ok) {
-        const data = await res.json();
-        setOrders(data);
-      } else {
-        const err = await res.json();
-        toast.error(err.message || 'Failed to fetch order list');
-      }
+      const qs = tab !== 'ALL' ? `?status=${encodeURIComponent(tab)}` : '';
+      const data = await apiGet<any[]>(
+        'order',
+        `/api/vendor/orders/${encodeURIComponent(shopId)}${qs}`,
+        { userIdHeader: 'Vendor_Id' }
+      );
+      setOrders(data);
     } catch (err) {
-      console.error("Error fetching vendor orders:", err);
+      if (isApiError(err) && (err.status === 401 || err.status === 403)) {
+        logout();
+        toast.error('Your session has expired. Please sign in again.');
+        router.push('/login');
+        return;
+      }
+      console.error('Error fetching vendor orders:', err);
+      toast.error(getUserFacingErrorMessage(err, { defaultMessage: 'Failed to fetch order list.' }));
     } finally {
       setLoadingOrders(false);
     }
@@ -112,31 +109,24 @@ export default function VendorOrdersPage() {
 
   const handleUpdateStatus = async (orderId: string, newStatus: string) => {
     setUpdatingId(orderId);
-    const token = localStorage.getItem('accessToken');
 
     try {
-      const res = await fetch(`http://localhost:8086/api/vendor/orders/${orderId}/status`, {
-        method: 'PUT',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-          'Vendor_Id': vendorId
-        },
-        body: JSON.stringify({
-          shopId: selectedShopId, 
-          newStatus: newStatus
-        })
-      });
-
-      if (res.ok) {
-        toast.success(`Successfully updated order to ${newStatus.replace('_', ' ')}!`);
-        fetchVendorOrders(selectedShopId, activeTab); 
-      } else {
-        const err = await res.json();
-        toast.error(err.message || "Failed to update status");
-      }
+      await apiPut(
+        'order',
+        `/api/vendor/orders/${encodeURIComponent(orderId)}/status`,
+        { shopId: selectedShopId, newStatus },
+        { userIdHeader: 'Vendor_Id' }
+      );
+      toast.success(`Successfully updated order to ${newStatus.replace(/_/g, ' ')}!`);
+      fetchVendorOrders(selectedShopId, activeTab);
     } catch (err) {
-      toast.error("Server connection error");
+      if (isApiError(err) && (err.status === 401 || err.status === 403)) {
+        logout();
+        toast.error('Your session has expired. Please sign in again.');
+        router.push('/login');
+        return;
+      }
+      toast.error(getUserFacingErrorMessage(err, { defaultMessage: 'Failed to update status.' }));
     } finally {
       setUpdatingId(null);
     }

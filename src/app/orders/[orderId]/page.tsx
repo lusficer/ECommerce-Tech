@@ -19,7 +19,7 @@ import {
 } from 'lucide-react';
 
 import { getAuth } from '@/lib/auth';
-import { apiGet, apiPost, apiPut } from '@/lib/api';
+import { apiGet, apiPost, apiPut, getUserFacingErrorMessage } from '@/lib/api';
 import {
   canFileDispute,
   getDisputeLabel,
@@ -46,15 +46,25 @@ export default function OrderDetailsPage({ params }: { params: Promise<{ orderId
   const [isSuccessFromCheckout, setIsSuccessFromCheckout] = useState(false);
 
   useEffect(() => {
+    if (!orderId) return;
+
     const paymentStatusQuery = searchParams.get('payment');
     if (paymentStatusQuery === 'success') {
-      toast.success('Payment successful! Your order has been placed.');
-      window.history.replaceState(null, '', `/orders/${orderId}`);
+      const query = new URLSearchParams({
+        orderId,
+        shops: '1',
+        payment: 'success',
+      });
+      router.replace(`/checkout/success?${query.toString()}`);
     } else if (paymentStatusQuery === 'failed') {
-      toast.error('Payment failed or you have canceled the transaction.');
-      window.history.replaceState(null, '', `/orders/${orderId}`);
+      const query = new URLSearchParams({
+        orderId,
+        shops: '1',
+        payment: 'failed',
+      });
+      router.replace(`/checkout/success?${query.toString()}`);
     }
-  }, [searchParams, orderId]);
+  }, [searchParams, orderId, router]);
 
   const fetchOrderDetailsAndTracking = async () => {
     const { token, userId } = getAuth();
@@ -130,15 +140,17 @@ export default function OrderDetailsPage({ params }: { params: Promise<{ orderId
   };
 
   const handleCompleteOrder = async () => {
-    if (!window.confirm('Confirm that you have received the items and they are intact?')) return;
-
     setActionLoading(true);
     try {
       await apiPut('order', `/api/user/orders/${orderId}/complete`);
-      toast.success('Thank you for your purchase!');
+      toast.success('Thank you! Order has been completed.');
       await fetchOrderDetailsAndTracking();
-    } catch (error: any) {
-      toast.error(error?.message || 'Error confirming order');
+    } catch (err) {
+      toast.error(
+        getUserFacingErrorMessage(err, {
+          defaultMessage: 'Cannot complete order.',
+        })
+      );
     } finally {
       setActionLoading(false);
     }
@@ -180,7 +192,7 @@ export default function OrderDetailsPage({ params }: { params: Promise<{ orderId
       case 'DELIVERED':
         return { color: 'bg-green-50 text-green-600 border-green-200', icon: CheckCircle2, label: 'Delivered' };
       case 'COMPLETED':
-        return { color: 'bg-teal-50 text-teal-600 border-teal-200', icon: CheckCircle2, label: 'Completed' };
+        return { color: 'bg-teal-50 text-teal-600 border-teal-200', icon: CheckCircle2, label: 'Complete' };
       case 'DISPUTED':
         return { color: 'bg-orange-50 text-orange-600 border-orange-200', icon: Scale, label: 'Disputed' };
       case 'CANCELLED':
@@ -394,14 +406,14 @@ export default function OrderDetailsPage({ params }: { params: Promise<{ orderId
                   <button
                     onClick={handleCompleteOrder}
                     disabled={actionLoading}
-                    className="w-full py-4 bg-teal-500 hover:bg-teal-600 text-white font-black rounded-2xl transition-colors shadow-md shadow-teal-500/20 disabled:opacity-50 flex items-center justify-center gap-2"
+                    className="w-full py-4 bg-green-600 hover:bg-green-700 text-white font-black rounded-2xl transition-colors shadow-md shadow-green-500/20 disabled:opacity-50 flex items-center justify-center gap-2 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
                   >
                     {actionLoading ? (
                       <Loader2 className="w-5 h-5 animate-spin" />
                     ) : (
                       <CheckCircle2 className="w-5 h-5" />
                     )}
-                    Confirm Order Received
+                    Confirm Receipt
                   </button>
                 )}
 

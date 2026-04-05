@@ -9,6 +9,10 @@ import {
   Truck, ShieldCheck, Loader2, Store 
 } from 'lucide-react';
 
+import { logout } from '@/lib/auth';
+import { apiDelete, apiGet, apiPost, getUserFacingErrorMessage, isApiError } from '@/lib/api';
+import type { CartResponse } from '@/types';
+
 export default function CheckoutPage() {
   const router = useRouter();
   const [isMounted, setIsMounted] = useState(false);
@@ -45,12 +49,8 @@ export default function CheckoutPage() {
     }
 
     try {
-      const res = await fetch(`http://localhost:8088/api/cart`, {
-        headers: { 'Authorization': `Bearer ${token}`, 'userId': userId }
-      });
-      if (res.ok) {
-        const data = await res.json();
-        const allCartItems = data.items || [];
+      const cartData = await apiGet<CartResponse>('cart', '/api/cart');
+      const allCartItems = cartData.items || [];
         
         const selectedIdsStr = localStorage.getItem('selectedCheckoutItems');
         let filteredItems = allCartItems;
@@ -86,24 +86,29 @@ export default function CheckoutPage() {
         await Promise.all(
           uniqueShopIds.map(async (shopIdStr) => {
             try {
-               const shopRes = await fetch(`http://localhost:8082/api/shops/${shopIdStr}`, {
-                 headers: { 'Authorization': `Bearer ${token}` }
+               const shopData = await apiGet<any>('shop', `/api/shops/${shopIdStr}`, {
+                 withUserId: false,
                });
-               if (shopRes.ok) {
-                 const shopData = await shopRes.json();
-                 namesMap[shopIdStr as string] = shopData.shopName || (shopIdStr as string);
-               } else {
-                 namesMap[shopIdStr as string] = (shopIdStr as string);
-               }
+               namesMap[shopIdStr as string] = shopData?.shopName || (shopIdStr as string);
             } catch (e) {
                namesMap[shopIdStr as string] = (shopIdStr as string);
             }
           })
         );
         setShopNames(namesMap);
-      }
     } catch (err) {
-      toast.error("Cannot load cart information");
+      if (isApiError(err) && (err.status === 401 || err.status === 403)) {
+        logout();
+        toast.error('Your session has expired. Please sign in again.');
+        router.push('/login');
+        return;
+      }
+
+      toast.error(
+        getUserFacingErrorMessage(err, {
+          defaultMessage: 'Unable to load checkout information.',
+        })
+      );
     }
   };
 
@@ -126,7 +131,7 @@ export default function CheckoutPage() {
     e.preventDefault();
     if (cartItems.length === 0) return;
 
-    // [MỚI] Bắt lỗi nếu chọn VNPay mà đòi mua nhiều Shop cùng lúc
+    // VNPay currently supports checkout from only one shop.
     if (formData.paymentMethod === 'VNPAY' && shopIds.length > 1) {
       toast.error('VNPay currently supports checking out from ONE shop at a time. Please select COD or checkout separately.');
       return;
@@ -140,7 +145,7 @@ export default function CheckoutPage() {
       let vnPayUrlToRedirect = null;
       let lastOrderId = null;
 
-      // [MỚI] Chạy vòng lặp để tạo đơn hàng RIÊNG BIỆT cho từng Shop
+      // Create a separate order per shop.
       for (const shopId of shopIds) {
         const itemsForThisShop = groupedItems[shopId].map((item:any) => ({
           productId: item.productId,
@@ -164,22 +169,7 @@ export default function CheckoutPage() {
           items: itemsForThisShop
         };
 
-        const res = await fetch('http://localhost:8086/api/user/orders/place', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`,
-            'userId': userId || ''
-          },
-          body: JSON.stringify(payload)
-        });
-
-        if (!res.ok) {
-           const err = await res.json();
-           throw new Error(err.message || `Failed to place order for shop ${shopNames[shopId]}`);
-        }
-
-        const orderData = await res.json();
+        const orderData = await apiPost<any>('order', '/api/user/orders/place', payload);
         lastOrderId = orderData.orderId;
         
         if (orderData.paymentUrl) {
@@ -188,29 +178,47 @@ export default function CheckoutPage() {
       }
 
       const itemIdsToRemove = cartItems.map(item => item.itemId);
-      await fetch('http://localhost:8088/api/cart/items', {
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}`, 'userId': userId || '' },
-        body: JSON.stringify(itemIdsToRemove)
-      });
+      await apiDelete<CartResponse>('cart', '/api/cart/items', itemIdsToRemove);
       
       localStorage.removeItem('selectedCheckoutItems');
       window.dispatchEvent(new Event('cartUpdated')); 
 
       if (vnPayUrlToRedirect) {
+         // Keep a hint for downstream pages if needed.
+         if (lastOrderId) localStorage.setItem('justPlacedOrder', String(lastOrderId));
           window.location.href = vnPayUrlToRedirect; 
       } else {
           toast.success('Order placed successfully!');
           if (shopIds.length > 1) {
-             router.push(`/orders`); 
+           const query = new URLSearchParams({
+            shops: String(shopIds.length),
+            payment: 'success',
+           });
+           router.push(`/checkout/success?${query.toString()}`);
           } else {
-             localStorage.setItem('justPlacedOrder', lastOrderId);
-             router.push(`/orders/${lastOrderId}`); 
+           if (lastOrderId) localStorage.setItem('justPlacedOrder', String(lastOrderId));
+           const query = new URLSearchParams({
+            orderId: String(lastOrderId || ''),
+            shops: '1',
+            payment: 'success',
+           });
+           router.push(`/checkout/success?${query.toString()}`);
           }
       }
 
     } catch (error: any) {
-      toast.error(error.message || 'Error connecting to the server!');
+      if (isApiError(error) && (error.status === 401 || error.status === 403)) {
+        logout();
+        toast.error('Your session has expired. Please sign in again.');
+        router.push('/login');
+        return;
+      }
+
+      toast.error(
+        getUserFacingErrorMessage(error, {
+          defaultMessage: 'Failed to place your order.',
+        })
+      );
     } finally {
       setIsSubmitting(false);
     }

@@ -1,15 +1,34 @@
-// ===== src/components/layout/UserMenu.tsx =====
 'use client';
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { User, Store, LogOut } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { getAuth, logout } from '@/lib/auth';
+import { apiGet } from '@/lib/api';
+
+function canAccessSellerPortal(userId: string, role: string): boolean {
+  const normalizedRole = (role || '').toUpperCase();
+  if (
+    ['VENDOR', 'SHOP_MANAGER', 'SHIPPER', 'ADMIN'].includes(
+      normalizedRole
+    )
+  ) {
+    return true;
+  }
+
+  // Fallback: infer from ID prefix when role is missing.
+  return (
+    userId.startsWith('VEND') ||
+    userId.startsWith('SHOP_MNG') ||
+    userId.startsWith('SHIPPER')
+  );
+}
 
 export default function UserMenu() {
   const router = useRouter();
+  const pathname = usePathname();
   const [isMounted, setIsMounted]   = useState(false);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [userName, setUserName]     = useState('User');
@@ -17,25 +36,72 @@ export default function UserMenu() {
 
   useEffect(() => {
     setIsMounted(true);
-    const { token, userId } = getAuth();
-    if (token && userId) {
-      setIsLoggedIn(true);
-      setIsManager(true); // all logged-in users can access seller centre
-      fetchUserName(userId, token);
-    }
   }, []);
 
-  const fetchUserName = async (userId: string, token: string) => {
-    try {
-      const res = await fetch(`http://localhost:8081/api/account/status/${userId}`, {
-        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-      });
-      if (res.ok) {
-        const data = await res.json();
-        if (data.profile?.name) setUserName(data.profile.name);
+  useEffect(() => {
+    if (!isMounted) return;
+
+    let cancelled = false;
+
+    const refresh = async () => {
+      const { token, userId } = getAuth();
+      const loggedIn = Boolean(token && userId);
+
+      if (!loggedIn) {
+        if (cancelled) return;
+        setIsLoggedIn(false);
+        setIsManager(false);
+        setUserName('User');
+        return;
       }
-    } catch {}
-  };
+
+      if (cancelled) return;
+      setIsLoggedIn(true);
+
+      // Start with cached values for snappy UI.
+      const cachedName = localStorage.getItem('userName') || 'User';
+      setUserName(cachedName);
+
+      const cachedRole = localStorage.getItem('role') || '';
+      setIsManager(canAccessSellerPortal(userId, cachedRole));
+
+      // Then fetch the latest account status.
+      try {
+        const data = await apiGet<any>('user', `/api/account/status/${userId}`, {
+          withUserId: false,
+        });
+        if (cancelled) return;
+
+        const name = data?.profile?.name;
+        if (typeof name === 'string' && name.trim()) {
+          setUserName(name);
+          localStorage.setItem('userName', name);
+        }
+
+        const resolvedRole = (data?.role || data?.profile?.role || '') as string;
+        if (resolvedRole) {
+          localStorage.setItem('role', resolvedRole);
+        }
+        setIsManager(canAccessSellerPortal(userId, resolvedRole || cachedRole));
+      } catch {
+        // Silent – fallback to cached role/name.
+      }
+    };
+
+    refresh();
+
+    const onAuthUpdated = () => {
+      refresh();
+    };
+    window.addEventListener('authUpdated', onAuthUpdated);
+    window.addEventListener('storage', onAuthUpdated);
+
+    return () => {
+      cancelled = true;
+      window.removeEventListener('authUpdated', onAuthUpdated);
+      window.removeEventListener('storage', onAuthUpdated);
+    };
+  }, [isMounted, pathname]);
 
   const handleLogout = () => {
     logout();

@@ -1,4 +1,3 @@
-// ===== src/app/seller/forecast/page.tsx =====
 'use client';
 
 import React, { useState, useEffect } from 'react';
@@ -13,6 +12,7 @@ import {
 import { getAuth } from '@/lib/auth';
 import { formatCurrency } from '@/lib/format';
 import LoadingScreen from '@/components/ui/LoadingScreen';
+import { apiGet, apiPost, getUserFacingErrorMessage } from '@/lib/api';
 
 interface ForecastResult {
   productId: string;
@@ -25,8 +25,6 @@ interface ForecastResult {
   newSafetyStock: number | null;
   status: string; // STABLE | UPDATE_NEEDED | UPDATED | NO_DATA
 }
-
-// ─── Trend config helpers ─────────────────────────────────────────────────────
 function getTrendConfig(label: string | null) {
   if (!label) return { icon: Minus, color: 'text-slate-500', bg: 'bg-slate-50', border: 'border-slate-200', badge: 'bg-slate-100 text-slate-600' };
   if (label.includes('HIGH VELOCITY'))
@@ -48,8 +46,6 @@ function getStatusPill(status: string) {
     default:             return 'bg-blue-100 text-blue-700 border-blue-200';
   }
 }
-
-// ─── Summary stat cards ───────────────────────────────────────────────────────
 function SummaryCards({ results }: { results: ForecastResult[] }) {
   const surging  = results.filter(r => r.trendLabel?.includes('HIGH VELOCITY')).length;
   const growing  = results.filter(r => r.trendLabel?.includes('POSITIVE')).length;
@@ -83,7 +79,6 @@ function SummaryCards({ results }: { results: ForecastResult[] }) {
   );
 }
 
-// ─── Forecast card ────────────────────────────────────────────────────────────
 function ForecastCard({ item }: { item: ForecastResult }) {
   const [expanded, setExpanded] = useState(false);
   const cfg = getTrendConfig(item.trendLabel);
@@ -109,7 +104,6 @@ function ForecastCard({ item }: { item: ForecastResult }) {
 
   return (
     <div className={`bg-white rounded-2xl border ${cfg.border} shadow-sm overflow-hidden transition-all`}>
-      {/* Header row */}
       <div
         className="p-5 flex items-start gap-4 cursor-pointer hover:bg-slate-50/50 transition-colors"
         onClick={() => setExpanded(!expanded)}
@@ -130,7 +124,6 @@ function ForecastCard({ item }: { item: ForecastResult }) {
           </span>
         </div>
 
-        {/* Right: slope + safety stock */}
         <div className="shrink-0 text-right hidden sm:block">
           <p className="text-xs font-bold text-slate-400 mb-1">Slope</p>
           <p className={`text-lg font-black ${(item.trendSlope ?? 0) >= 0 ? 'text-green-600' : 'text-red-500'}`}>
@@ -150,13 +143,12 @@ function ForecastCard({ item }: { item: ForecastResult }) {
         </div>
       </div>
 
-      {/* Expanded: AI recommendation */}
       {expanded && item.aiRecommendation && (
         <div className={`px-5 pb-5 border-t ${cfg.border}`}>
           <div className={`mt-4 rounded-xl p-4 ${cfg.bg} flex gap-3`}>
             <Brain className={`w-5 h-5 shrink-0 mt-0.5 ${cfg.color}`} />
             <div>
-              <p className="text-xs font-black text-slate-500 uppercase tracking-wider mb-1.5">AI Recommendation</p>
+              <p className="text-xs font-black text-slate-500 uppercase tracking-wider mb-1.5">Recommendation</p>
               <p className="text-sm text-slate-700 leading-relaxed">{item.aiRecommendation}</p>
             </div>
           </div>
@@ -187,7 +179,6 @@ function ForecastCard({ item }: { item: ForecastResult }) {
   );
 }
 
-// ─── Main page ────────────────────────────────────────────────────────────────
 export default function InventoryForecastPage() {
   const router = useRouter();
   const [loading, setLoading]         = useState(true);
@@ -198,7 +189,7 @@ export default function InventoryForecastPage() {
   const [shopId, setShopId]           = useState<string | null>(null);
   const [shops, setShops]             = useState<{ shopId: string; shopName?: string; name?: string }[]>([]);
 
-  // Lấy danh sách shops — giống analytics page
+  // Fetch shops list — same as analytics page
   useEffect(() => {
     const token  = localStorage.getItem('accessToken');
     const userId = localStorage.getItem('userId');
@@ -208,30 +199,39 @@ export default function InventoryForecastPage() {
 
     const fetchShops = async () => {
       try {
-        let res;
         if (role.startsWith('SHOP_MNG') || role.includes('MANAGER')) {
-          res = await fetch(`http://localhost:8082/api/shops/owner/${userId}`, {
-            headers: { Authorization: `Bearer ${token}` },
-          });
-        } else {
-          res = await fetch(`http://localhost:8082/api/shops/my-assigned-shops`, {
-            headers: { Authorization: `Bearer ${token}`, userId },
-          });
-        }
-        if (res && res.ok) {
-          const data = await res.json();
+          const data = await apiGet<any | any[]>(
+            'shop',
+            `/api/shops/owner/${userId}`,
+            { withUserId: false }
+          );
           const list = Array.isArray(data) ? data : [data];
           if (list.length > 0) {
             setShops(list);
             setShopId(list[0].shopId);
           }
+        } else {
+          const list = await apiGet<any[]>(
+            'shop',
+            '/api/shops/my-assigned-shops'
+          );
+          if (list.length > 0) {
+            setShops(list);
+            setShopId(list[0].shopId);
+          }
         }
-      } catch {}
+      } catch (err) {
+        toast.error(
+          getUserFacingErrorMessage(err, {
+            defaultMessage: 'Failed to load shops.',
+          })
+        );
+      }
     };
     fetchShops();
   }, []);
 
-  // Fetch forecast khi đã có shopId
+  // Fetch forecast when shopId is available
   useEffect(() => {
     if (shopId !== null) fetchPreview();
   }, [shopId]);
@@ -242,20 +242,18 @@ export default function InventoryForecastPage() {
     if (!token) { router.push('/login'); return; }
 
     try {
-      const url = shopId
-        ? `http://localhost:8089/api/internal/forecast/preview?shopId=${shopId}`
-        : `http://localhost:8089/api/internal/forecast/preview`;
-      const res = await fetch(url, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (res.ok) {
-        setResults(await res.json());
-        setLastUpdated(new Date().toLocaleTimeString());
-      } else {
-        toast.error('Failed to load forecast data');
-      }
-    } catch {
-      toast.error('Cannot connect to Inventory service');
+      const path = shopId
+        ? `/api/internal/forecast/preview?shopId=${shopId}`
+        : '/api/internal/forecast/preview';
+      const data = await apiGet<ForecastResult[]>('inventory', path);
+      setResults(data);
+      setLastUpdated(new Date().toLocaleTimeString());
+    } catch (err) {
+      toast.error(
+        getUserFacingErrorMessage(err, {
+          defaultMessage: 'Failed to load forecast data.',
+        })
+      );
     } finally {
       setLoading(false);
     }
@@ -265,24 +263,20 @@ export default function InventoryForecastPage() {
     setApplying(true);
     const { token } = getAuth();
     try {
-      const url = shopId
-        ? `http://localhost:8089/api/internal/forecast/run?shopId=${shopId}`
-        : `http://localhost:8089/api/internal/forecast/run`;
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (res.ok) {
-        const data: ForecastResult[] = await res.json();
-        setResults(data);
-        setLastUpdated(new Date().toLocaleTimeString());
-        const updatedCount = data.filter(r => r.status === 'UPDATED').length;
-        toast.success(`Forecast applied! ${updatedCount} products updated.`);
-      } else {
-        toast.error('Failed to apply forecast');
-      }
-    } catch {
-      toast.error('Cannot connect to Inventory service');
+      const path = shopId
+        ? `/api/internal/forecast/run?shopId=${shopId}`
+        : '/api/internal/forecast/run';
+      const data = await apiPost<ForecastResult[]>('inventory', path);
+      setResults(data);
+      setLastUpdated(new Date().toLocaleTimeString());
+      const updatedCount = data.filter(r => r.status === 'UPDATED').length;
+      toast.success(`Forecast applied! ${updatedCount} products updated.`);
+    } catch (err) {
+      toast.error(
+        getUserFacingErrorMessage(err, {
+          defaultMessage: 'Failed to apply forecast.',
+        })
+      );
     } finally {
       setApplying(false);
     }
@@ -310,8 +304,6 @@ export default function InventoryForecastPage() {
 
   return (
     <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-8 mb-20 font-sans">
-
-      {/* Breadcrumb */}
       <div className="text-sm font-bold text-slate-400 mb-6 uppercase tracking-wide flex items-center gap-2">
         <Link href="/" className="hover:text-cyan-600 transition-colors">Home</Link>
         <span>/</span>
@@ -320,7 +312,6 @@ export default function InventoryForecastPage() {
         <span className="text-slate-900">Inventory Forecast</span>
       </div>
 
-      {/* Page header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-8">
         <div>
           <div className="flex items-center gap-3 mb-1">
@@ -336,7 +327,6 @@ export default function InventoryForecastPage() {
         </div>
 
         <div className="flex items-center gap-3 shrink-0 flex-wrap justify-end">
-          {/* Shop dropdown */}
           {shops.length > 1 && (
             <select
               value={shopId ?? ''}
@@ -382,7 +372,6 @@ export default function InventoryForecastPage() {
         </div>
       </div>
 
-      {/* Info banner */}
       <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4 mb-6 flex gap-3">
         <Info className="w-5 h-5 text-blue-600 shrink-0 mt-0.5" />
         <div className="text-sm text-blue-700">
@@ -392,10 +381,8 @@ export default function InventoryForecastPage() {
         </div>
       </div>
 
-      {/* Summary cards */}
       {results.length > 0 && <SummaryCards results={results} />}
 
-      {/* Filter tabs */}
       <div className="flex items-center gap-2 flex-wrap mb-6">
         {FILTER_OPTIONS.map(opt => (
           <button
@@ -419,7 +406,6 @@ export default function InventoryForecastPage() {
         ))}
       </div>
 
-      {/* Results list */}
       {filtered.length === 0 ? (
         <div className="bg-white rounded-2xl border border-slate-200 py-16 text-center">
           <BarChart3 className="w-12 h-12 text-slate-300 mx-auto mb-3" />

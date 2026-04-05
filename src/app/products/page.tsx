@@ -1,4 +1,3 @@
-// ===== src/app/products/page.tsx =====
 'use client';
 
 import React, { useState, useEffect, Suspense } from 'react';
@@ -7,15 +6,16 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { ChevronRight, Loader2 } from 'lucide-react';
 
 import { Category, Product } from '@/types';
+import { apiGet } from '@/lib/api';
 import ProductFilterSidebar from '@/components/products/ProductFilterSidebar';
 import ProductGrid from '@/components/products/ProductGrid';
 
-// ─── Inner component (needs useSearchParams inside Suspense) ──────────────────
+// useSearchParams must be wrapped in Suspense in the App Router.
 function ProductsContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  // URL params → initial state
+  // Read filters from the URL so the page is shareable/bookmarkable.
   const urlKeyword  = searchParams.get('keyword')  || '';
   const urlCategory = searchParams.get('category') || '';
   const urlBrand    = searchParams.get('brand')    || '';
@@ -27,7 +27,6 @@ function ProductsContent() {
   const [loading, setLoading]                 = useState(true);
   const [loadingCategories, setLoadingCategories] = useState(true);
 
-  // Filter state (mirrors sidebar controls)
   const [keyword, setKeyword]                 = useState('');
   const [selectedCategory, setSelectedCategory] = useState('');
   const [brand, setBrand]                     = useState('');
@@ -35,23 +34,22 @@ function ProductsContent() {
   const [maxPrice, setMaxPrice]               = useState('');
   const [sortOption, setSortOption]           = useState('latest');
 
-  // Pagination
   const [currentPage, setCurrentPage]         = useState(0);
   const [totalPages, setTotalPages]           = useState(1);
   const [totalElements, setTotalElements]     = useState(0);
 
-  // ─── Load categories once ────────────────────────────────────────────────────
+  // Load categories once for sidebar filters.
   useEffect(() => {
     (async () => {
       try {
-        const res = await fetch('http://localhost:8083/api/categories');
-        if (res.ok) setCategories(await res.json());
+        const data = await apiGet<Category[]>('product', '/api/categories', { withUserId: false });
+        setCategories(data ?? []);
       } catch {}
       finally { setLoadingCategories(false); }
     })();
   }, []);
 
-  // ─── Sync URL → state, then fetch ───────────────────────────────────────────
+  // Keep state in sync with the URL, then fetch.
   useEffect(() => {
     setKeyword(urlKeyword);
     setSelectedCategory(urlCategory);
@@ -59,10 +57,11 @@ function ProductsContent() {
     setMinPrice(urlMinPrice);
     setMaxPrice(urlMaxPrice);
     fetchProducts(urlKeyword, urlCategory, urlBrand, urlMinPrice, urlMaxPrice, 0, sortOption);
+    // The URL is the source of truth for filters.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [urlKeyword, urlCategory, urlBrand, urlMinPrice, urlMaxPrice, sortOption]);
 
-  // ─── Fetch products ──────────────────────────────────────────────────────────
+  // Fetch products for the current filter state.
   const fetchProducts = async (
     kw: string, catId: string, br: string, min: string, max: string,
     pageIdx: number, sort: string,
@@ -82,18 +81,19 @@ function ProductsContent() {
       params.append('size', '16');
       params.append('sort', sort);
 
-      const res = await fetch(`http://localhost:8083/api/internal/products/filter?${params}`);
-      if (res.ok) {
-        const data = await res.json();
-        setProducts(data.content || []);
-        setTotalPages(data.totalPages || 1);
-        setTotalElements(data.totalElements || 0);
-      }
+      const data = await apiGet<any>(
+        'product',
+        `/api/internal/products/filter?${params}`,
+        { withAuth: false, withUserId: false }
+      );
+      setProducts(data?.content || []);
+      setTotalPages(data?.totalPages || 1);
+      setTotalElements(data?.totalElements || 0);
     } catch {}
     finally { setLoading(false); }
   };
 
-  // ─── Filter actions ──────────────────────────────────────────────────────────
+  // Update the URL so filters are bookmarkable.
   const handleApplyFilter = () => {
     const params = new URLSearchParams();
     if (keyword)          params.append('keyword', keyword);
@@ -117,7 +117,6 @@ function ProductsContent() {
 
   return (
     <div className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 py-8 mb-20 font-sans">
-      {/* Breadcrumb */}
       <div className="flex items-center text-sm font-bold text-slate-400 mb-8 uppercase tracking-wide">
         <Link href="/" className="hover:text-cyan-600 transition-colors">Home</Link>
         <ChevronRight className="w-4 h-4 mx-2" />
@@ -125,7 +124,6 @@ function ProductsContent() {
       </div>
 
       <div className="flex flex-col lg:flex-row gap-8 items-start">
-        {/* Sidebar */}
         <ProductFilterSidebar
           categories={categories}
           loadingCategories={loadingCategories}
@@ -140,7 +138,6 @@ function ProductsContent() {
           onApply={handleApplyFilter}
         />
 
-        {/* Grid */}
         <ProductGrid
           products={products}
           loading={loading}

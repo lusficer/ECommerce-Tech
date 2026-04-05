@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import Link from 'next/link';
 import { EyeOff, Fingerprint, Loader2 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { apiPost, getUserFacingErrorMessage, getValidationErrors } from '@/lib/api';
 
 const ROLES = [
   { value: 'CUSTOMER', label: 'Customer' },
@@ -45,31 +46,36 @@ export default function RegisterPage() {
     setLoading(true);
 
     try {
-      const response = await fetch('http://localhost:8081/api/auth/register', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
+      await apiPost(
+        'user',
+        '/api/auth/register',
+        {
           name: formData.name,
           email: formData.email,
           phone: formData.phone,
           password: formData.password,
           role: formData.role,
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error('Registration failed. Please try again!');
-      }
-
-      const data = await response.json();
-      console.log('Register Success:', data);
+        },
+        { withAuth: false, withUserId: false }
+      );
       toast.success('Register successful! Redirecting to login page');
 
       window.location.href = '/login';
     } catch (err: any) {
-      setError(err.message);
+      const validationErrors = getValidationErrors(err);
+      if (validationErrors) {
+        const combined = Object.entries(validationErrors)
+          .map(([field, message]) => `${field}: ${message}`)
+          .join('\n');
+        setError(combined || 'Validation failed.');
+      } else {
+        setError(
+          getUserFacingErrorMessage(err, {
+            context: 'register',
+            defaultMessage: 'Registration failed. Please try again.',
+          })
+        );
+      }
     } finally {
       setLoading(false);
     }

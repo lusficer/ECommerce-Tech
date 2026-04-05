@@ -1,4 +1,3 @@
-// ===== src/app/orders/page.tsx =====
 'use client';
 
 import React, { useState, useEffect } from 'react';
@@ -9,7 +8,7 @@ import toast from 'react-hot-toast';
 
 import { getAuth } from '@/lib/auth';
 import { getFirstImage } from '@/lib/format';
-import { apiGet, apiPost } from '@/lib/api';
+import { apiGet, apiPost, apiPut, getUserFacingErrorMessage } from '@/lib/api';
 import { getLatestDispute, getEffectiveOrderStatus } from '@/lib/disputeHelpers';
 import LoadingScreen from '@/components/ui/LoadingScreen';
 import Modal from '@/components/ui/Modal';
@@ -43,7 +42,6 @@ export default function OrdersPage() {
   const [disputeTarget, setDisputeTarget] = useState<any>(null);
   const [viewDisputeTarget, setViewDisputeTarget] = useState<any>(null);
 
-  // ─── Fetch ───────────────────────────────────────────────────────────────────
   const fetchOrderHistory = async () => {
     const { token, userId } = getAuth();
     if (!token || !userId) {
@@ -53,60 +51,56 @@ export default function OrdersPage() {
     }
 
     try {
-      const res = await fetch('http://localhost:8086/api/user/orders/history', {
-        headers: { Authorization: `Bearer ${token}`, userId },
-      });
+      const data = await apiGet<any[]>('order', '/api/user/orders/history');
 
-      if (res.ok) {
-        const data = await res.json();
-
-        let disputesByOrderId: Record<string, any[]> = {};
-        try {
-          const disputes = await apiGet<any[]>('dispute', '/api/user/disputes', {
-            userIdHeader: 'X-User-Id',
-          });
-
-          disputesByOrderId = (disputes || []).reduce((accumulator: Record<string, any[]>, dispute: any) => {
-            const orderDisputes = accumulator[dispute.orderId] || [];
-            accumulator[dispute.orderId] = [...orderDisputes, dispute];
-            return accumulator;
-          }, {});
-        } catch {
-          disputesByOrderId = {};
-        }
-
-        const orderWithDisputes = data.map((order: any) => {
-          const disputes = disputesByOrderId[order.orderId] || [];
-          const latestDispute = getLatestDispute(disputes);
-          return {
-            ...order,
-            disputes,
-            latestDispute,
-            disputeStatus: latestDispute?.status,
-          };
+      let disputesByOrderId: Record<string, any[]> = {};
+      try {
+        const disputes = await apiGet<any[]>('dispute', '/api/user/disputes', {
+          userIdHeader: 'X-User-Id',
         });
 
-        setOrders(orderWithDisputes);
-
-        // Fetch shop names in parallel
-        const uniqueIds = Array.from(new Set<string>(data.map((o: any) => o.shopId)));
-        const map: Record<string, string> = {};
-        await Promise.all(
-          uniqueIds.map(async (id) => {
-            try {
-              const r = await fetch(`http://localhost:8082/api/shops/${id}`, {
-                headers: { Authorization: `Bearer ${token}` },
-              });
-              map[id] = r.ok ? (await r.json()).shopName ?? id : id;
-            } catch { map[id] = id; }
-          })
-        );
-        setShopNames(map);
-      } else {
-        toast.error('Failed to load order history');
+        disputesByOrderId = (disputes || []).reduce((accumulator: Record<string, any[]>, dispute: any) => {
+          const orderDisputes = accumulator[dispute.orderId] || [];
+          accumulator[dispute.orderId] = [...orderDisputes, dispute];
+          return accumulator;
+        }, {});
+      } catch {
+        disputesByOrderId = {};
       }
-    } catch {
-      toast.error('Cannot connect to server!');
+
+      const orderWithDisputes = data.map((order: any) => {
+        const disputes = disputesByOrderId[order.orderId] || [];
+        const latestDispute = getLatestDispute(disputes);
+        return {
+          ...order,
+          disputes,
+          latestDispute,
+          disputeStatus: latestDispute?.status,
+        };
+      });
+
+      setOrders(orderWithDisputes);
+
+      // Shop names are fetched from the shop service, not the order payload.
+      const uniqueIds = Array.from(new Set<string>(data.map((o: any) => o.shopId)));
+      const map: Record<string, string> = {};
+      await Promise.all(
+        uniqueIds.map(async (id) => {
+          try {
+            const shop = await apiGet<any>('shop', `/api/shops/${id}`, { withUserId: false });
+            map[id] = shop?.shopName ?? id;
+          } catch {
+            map[id] = id;
+          }
+        })
+      );
+      setShopNames(map);
+    } catch (err) {
+      toast.error(
+        getUserFacingErrorMessage(err, {
+          defaultMessage: 'Failed to load order history.',
+        })
+      );
     } finally {
       setLoading(false);
     }
@@ -114,18 +108,19 @@ export default function OrdersPage() {
 
   useEffect(() => { fetchOrderHistory(); }, []);
 
-  // ─── Actions ─────────────────────────────────────────────────────────────────
   const handleConfirmReceipt = async (orderId: string) => {
     setActionLoadingId(orderId);
-    const { token, userId } = getAuth();
     try {
-      const res = await fetch(`http://localhost:8086/api/user/orders/${orderId}/complete`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}`, userId: userId || '' },
-      });
-      if (res.ok) { toast.success('Thank you! Order has been completed.'); fetchOrderHistory(); }
-      else { const e = await res.json(); toast.error(e.message || 'Cannot complete order.'); }
-    } catch { toast.error('Server connection error.'); }
+      await apiPut('order', `/api/user/orders/${orderId}/complete`);
+      toast.success('Thank you! Order has been completed.');
+      fetchOrderHistory();
+    } catch (err) {
+      toast.error(
+        getUserFacingErrorMessage(err, {
+          defaultMessage: 'Cannot complete order.',
+        })
+      );
+    }
     finally { setActionLoadingId(null); }
   };
 
@@ -133,19 +128,20 @@ export default function OrdersPage() {
     const { orderId } = cancelModal;
     setCancelModal({ isOpen: false, orderId: '' });
     setActionLoadingId(orderId);
-    const { token, userId } = getAuth();
     try {
-      const res = await fetch(`http://localhost:8086/api/user/orders/${orderId}/cancel`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}`, userId: userId || '' },
-      });
-      if (res.ok) { toast.success('Order has been cancelled successfully.'); fetchOrderHistory(); }
-      else { const e = await res.json(); toast.error(e.message || 'Cannot cancel order.'); }
-    } catch { toast.error('Server connection error.'); }
+      await apiPut('order', `/api/user/orders/${orderId}/cancel`);
+      toast.success('Order has been cancelled successfully.');
+      fetchOrderHistory();
+    } catch (err) {
+      toast.error(
+        getUserFacingErrorMessage(err, {
+          defaultMessage: 'Cannot cancel order.',
+        })
+      );
+    }
     finally { setActionLoadingId(null); }
   };
 
-  // ─── Derived state ────────────────────────────────────────────────────────────
   const filteredOrders = orders.filter((o) => {
     if (activeTab === 'ALL') return true;
     if (activeTab === 'DISPUTED') return Boolean(o.latestDispute);
@@ -193,7 +189,6 @@ export default function OrdersPage() {
     }
   };
 
-  // ─── Render ──────────────────────────────────────────────────────────────────
   if (loading) return <LoadingScreen />;
 
   return (
@@ -202,7 +197,6 @@ export default function OrdersPage() {
 
         <h1 className="text-3xl font-black text-slate-900 tracking-tight mb-6">My Orders</h1>
 
-        {/* Tab bar */}
         <div className="bg-white border-b border-slate-200 sticky top-16 z-30 mb-6 shadow-sm">
           <div className="flex overflow-x-auto">
             {ORDER_TABS.map((tab) => (
@@ -218,7 +212,6 @@ export default function OrdersPage() {
           </div>
         </div>
 
-        {/* Empty state */}
         {filteredOrders.length === 0 ? (
           <div className="bg-white rounded-2xl py-16 flex flex-col items-center justify-center border border-slate-200 shadow-sm">
             <ShoppingBag className="w-16 h-16 text-slate-300 mb-4" />
@@ -263,7 +256,6 @@ export default function OrdersPage() {
         )}
       </div>
 
-      {/* Cancel modal — uses shared Modal component */}
       <Modal
         isOpen={cancelModal.isOpen}
         onClose={() => setCancelModal({ isOpen: false, orderId: '' })}
@@ -297,7 +289,6 @@ export default function OrdersPage() {
         </p>
       </Modal>
 
-      {/* Review modal */}
       {reviewTarget && (
         <ReviewModal
           target={reviewTarget}

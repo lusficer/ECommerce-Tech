@@ -1,4 +1,3 @@
-// ===== src/components/ui/EmptyState.tsx =====
 // Empty state placeholder with an icon, title, optional subtitle, and CTA
 
 import React from 'react';
@@ -12,9 +11,9 @@ interface EmptyStateProps {
   ctaLabel?: string;
   ctaHref?: string;
   onCtaClick?: () => void;
-  /** Tailwind color class for the icon container background, default "bg-slate-200" */
+  // Tailwind color class for the icon container background.
   iconBg?: string;
-  /** Tailwind color class for the icon itself, default "text-slate-400" */
+  // Tailwind color class for the icon.
   iconColor?: string;
 }
 

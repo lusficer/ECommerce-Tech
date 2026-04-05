@@ -1,4 +1,3 @@
-// ===== src/components/cart/CartShopGroup.tsx =====
 'use client';
 
 import React from 'react';
@@ -32,7 +31,6 @@ export default function CartShopGroup({
 
   return (
     <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
-      {/* Shop header */}
       <div className="px-5 py-4 border-b border-slate-100 bg-slate-50 flex items-center gap-3">
         <input
           type="checkbox"
@@ -49,7 +47,6 @@ export default function CartShopGroup({
         </Link>
       </div>
 
-      {/* Items */}
       <div className="flex flex-col divide-y divide-slate-100">
         {items.map((item) => (
           <CartItemCard

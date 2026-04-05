@@ -5,6 +5,9 @@ import Link from 'next/link';
 import { Sparkles, Heart, CheckCircle2, XCircle, ShoppingCart, Loader2, ChevronRight } from 'lucide-react';
 import toast from 'react-hot-toast';
 
+import { logout } from '@/lib/auth';
+import { apiGet, apiPost, getUserFacingErrorMessage, isApiError } from '@/lib/api';
+
 interface Product {
   productId: string; name: string; price: number; mainImage: string; discountPercentage: number; stock: number;
 }
@@ -22,24 +25,29 @@ export default function NewReleasesPage() {
     const userId = localStorage.getItem('userId');
     if (!token || !userId) return;
     try {
-      const res = await fetch(`http://localhost:8081/api/wishlists/${userId}`, { headers: { 'Authorization': `Bearer ${token}` } });
-      if (res.ok) {
-        const data = await res.json();
-        setWishlistedIds(new Set(data.map((item: any) => item.productId)));
-      }
+      const data = await apiGet<any[]>('user', `/api/wishlists/${userId}`, { withUserId: false });
+      setWishlistedIds(new Set((data ?? []).map((item: any) => item.productId)));
     } catch (err) {}
   };
 
   const fetchProducts = async (pageNumber: number) => {
     try {
-      const res = await fetch(`http://localhost:8083/api/internal/products/filter?size=12&page=${pageNumber}&sort=latest`);
-      if (!res.ok) throw new Error("Failed to load data");
-      const data = await res.json();
+      const data = await apiGet<any>(
+        'product',
+        `/api/internal/products/filter?size=12&page=${pageNumber}&sort=latest`,
+        { withAuth: false, withUserId: false }
+      );
       const newProducts = data.content || [];
       if (pageNumber === 0) setProducts(newProducts);
       else setProducts(prev => [...prev, ...newProducts]);
       setHasMore(!data.last);
-    } catch (error) { toast.error("Unable to load product list."); }
+    } catch (error) {
+      toast.error(
+        getUserFacingErrorMessage(error, {
+          defaultMessage: 'Unable to load the product list.',
+        })
+      );
+    }
   };
 
   useEffect(() => { fetchProducts(0); fetchUserWishlist(); setLoading(false); }, []);
@@ -50,16 +58,25 @@ export default function NewReleasesPage() {
     e.preventDefault(); e.stopPropagation();
     const token = localStorage.getItem('accessToken') || localStorage.getItem('token');
     const userId = localStorage.getItem('userId');
-    if (!token || !userId) { toast.error("Please log in!"); return; }
+    if (!token || !userId) { toast.error('Please sign in to manage your wishlist.'); return; }
     try {
-      const res = await fetch(`http://localhost:8081/api/wishlists/${userId}/${productId}`, { method: 'POST', headers: { 'Authorization': `Bearer ${token}` } });
-      if (res.ok) {
-        const isNowWishlisted = !wishlistedIds.has(productId);
-        toast.success(isNowWishlisted ? "Added to Wishlist!" : "Removed from Wishlist!");
-        setWishlistedIds(prev => { const newSet = new Set(prev); isNowWishlisted ? newSet.add(productId) : newSet.delete(productId); return newSet; });
-        window.dispatchEvent(new Event('wishlistUpdated'));
+      await apiPost('user', `/api/wishlists/${userId}/${productId}`, undefined, { withUserId: false });
+      const isNowWishlisted = !wishlistedIds.has(productId);
+      toast.success(isNowWishlisted ? 'Added to wishlist!' : 'Removed from wishlist!');
+      setWishlistedIds(prev => { const newSet = new Set(prev); isNowWishlisted ? newSet.add(productId) : newSet.delete(productId); return newSet; });
+      window.dispatchEvent(new Event('wishlistUpdated'));
+    } catch (err) {
+      if (isApiError(err) && (err.status === 401 || err.status === 403)) {
+        logout();
+        toast.error('Your session has expired. Please sign in again.');
+        return;
       }
-    } catch (err) { toast.error("Connection error."); }
+      toast.error(
+        getUserFacingErrorMessage(err, {
+          defaultMessage: 'Failed to update your wishlist.',
+        })
+      );
+    }
   };
 
   if (loading) return <div className="min-h-screen flex items-center justify-center"><Loader2 className="w-12 h-12 text-blue-500 animate-spin" /></div>;
@@ -105,15 +122,29 @@ export default function NewReleasesPage() {
                   <div className="flex items-center gap-1.5">
                     {isOutOfStock ? <><XCircle className="w-4 h-4 text-red-500" /><span className="text-[11px] font-bold text-slate-500">Out of Stock</span></> : <><CheckCircle2 className="w-4 h-4 text-green-500" /><span className="text-[11px] font-bold text-blue-600">Ready to ship</span></>}
                   </div>
-                  <button disabled={isOutOfStock} onClick={(e) => { e.preventDefault(); toast.success("Đã thêm giỏ hàng"); }} className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${isOutOfStock ? 'bg-slate-100 text-slate-400' : 'bg-slate-900 text-white hover:bg-blue-500 shadow-md'}`}><ShoppingCart className="w-4 h-4" /></button>
-                                  <button disabled={isOutOfStock} onClick={(e) => { e.preventDefault(); toast.success("Added to cart"); }} className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${isOutOfStock ? 'bg-slate-100 text-slate-400' : 'bg-slate-900 text-white hover:bg-blue-500 shadow-md'}`}><ShoppingCart className="w-4 h-4" /></button>
+                  <button
+                    disabled={isOutOfStock}
+                    onClick={(e) => { e.preventDefault(); toast.success('Added to cart'); }}
+                    className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${isOutOfStock ? 'bg-slate-100 text-slate-400' : 'bg-slate-900 text-white hover:bg-blue-500 shadow-md'}`}
+                  >
+                    <ShoppingCart className="w-4 h-4" />
+                  </button>
                 </div>
               </Link>
             );
           })}
         </div>
-        {hasMore && (<div className="flex justify-center mt-12"><button onClick={handleLoadMore} disabled={loadingMore} className="px-8 py-3 bg-white border-2 border-slate-200 text-slate-700 font-bold rounded-xl hover:border-blue-500 hover:text-blue-600 flex items-center gap-2">{loadingMore ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Xem thêm'}</button></div>)}
-        {hasMore && (<div className="flex justify-center mt-12"><button onClick={handleLoadMore} disabled={loadingMore} className="px-8 py-3 bg-white border-2 border-slate-200 text-slate-700 font-bold rounded-xl hover:border-blue-500 hover:text-blue-600 flex items-center gap-2">{loadingMore ? <Loader2 className="w-5 h-5 animate-spin" /> : 'View More'}</button></div>)}
+        {hasMore && (
+          <div className="flex justify-center mt-12">
+            <button
+              onClick={handleLoadMore}
+              disabled={loadingMore}
+              className="px-8 py-3 bg-white border-2 border-slate-200 text-slate-700 font-bold rounded-xl hover:border-blue-500 hover:text-blue-600 flex items-center gap-2"
+            >
+              {loadingMore ? <Loader2 className="w-5 h-5 animate-spin" /> : 'View More'}
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

@@ -1,9 +1,8 @@
-// ===== src/components/ui/StatusBadge.tsx =====
-// Colored pill badge for order status, approval status, payment status, etc.
+// Colored pill badge for statuses (order, approval, payment, etc.)
 
 import React from 'react';
 
-// ─── Order / Shipping Statuses ────────────────────────────────────────────────
+// Order and shipping statuses
 const ORDER_STATUS_MAP: Record<string, { classes: string; label: string }> = {
   NEW:                  { classes: 'bg-blue-50 text-blue-600 border-blue-200',    label: 'New Order' },
   PENDING_VERIFICATION: { classes: 'bg-orange-50 text-orange-600 border-orange-200', label: 'Awaiting Manager' },
@@ -11,7 +10,8 @@ const ORDER_STATUS_MAP: Record<string, { classes: string; label: string }> = {
   READY_TO_SHIP:        { classes: 'bg-cyan-50 text-cyan-700 border-cyan-200',    label: 'Ready to Ship' },
   SHIPPING:             { classes: 'bg-purple-50 text-purple-600 border-purple-200', label: 'Shipping' },
   DELIVERED:            { classes: 'bg-green-50 text-green-600 border-green-200', label: 'Delivered' },
-  COMPLETED:            { classes: 'bg-teal-50 text-teal-600 border-teal-200',    label: 'Completed' },
+  COMPLETE:             { classes: 'bg-teal-50 text-teal-600 border-teal-200',    label: 'Complete' },
+  COMPLETED:            { classes: 'bg-teal-50 text-teal-600 border-teal-200',    label: 'Complete' },
   DISPUTED:             { classes: 'bg-orange-50 text-orange-700 border-orange-200', label: 'Disputed' },
   CANCELLED:            { classes: 'bg-red-50 text-red-600 border-red-200',       label: 'Cancelled' },
   REJECTED:             { classes: 'bg-red-100 text-red-800 border-red-300',      label: 'Rejected' },
@@ -19,14 +19,14 @@ const ORDER_STATUS_MAP: Record<string, { classes: string; label: string }> = {
   DELIVERY_FAILED:      { classes: 'bg-red-50 text-red-500 border-red-200',       label: 'Delivery Failed' },
 };
 
-// ─── Product Approval Statuses ────────────────────────────────────────────────
+// Product approval statuses
 const APPROVAL_STATUS_MAP: Record<string, { classes: string; label: string }> = {
   APPROVED:  { classes: 'bg-green-50 text-green-600 border-green-200', label: 'Approved' },
   PENDING:   { classes: 'bg-yellow-50 text-yellow-700 border-yellow-200', label: 'Pending Review' },
   REJECTED:  { classes: 'bg-red-50 text-red-600 border-red-200',       label: 'Rejected' },
 };
 
-// ─── Payment Statuses ─────────────────────────────────────────────────────────
+// Payment statuses
 const PAYMENT_STATUS_MAP: Record<string, { classes: string; label: string }> = {
   PAID:    { classes: 'bg-green-100 text-green-700 border-green-300', label: 'Paid' },
   PENDING: { classes: 'bg-yellow-50 text-yellow-700 border-yellow-200', label: 'Pending' },
@@ -38,7 +38,7 @@ export type StatusType = 'order' | 'approval' | 'payment';
 interface StatusBadgeProps {
   status: string;
   type?: StatusType;
-  /** Override the display label */
+  // Override the display label
   label?: string;
   className?: string;
 }

@@ -1,4 +1,3 @@
-// ===== src/components/products/ProductGrid.tsx =====
 'use client';
 
 import React from 'react';
@@ -36,7 +35,7 @@ export default function ProductGrid({
 }: ProductGridProps) {
   const router = useRouter();
 
-  // ─── Pagination pages array ─────────────────────────────────────────────────
+  // Keeps pagination compact when there are many pages.
   const buildPages = (): (number | '...')[] => {
     if (totalPages <= 7) return Array.from({ length: totalPages }, (_, i) => i + 1);
     const uiPage = currentPage + 1;
@@ -48,7 +47,6 @@ export default function ProductGrid({
 
   return (
     <div className="w-full lg:w-3/4">
-      {/* Toolbar */}
       <div className="bg-white rounded-3xl p-4 md:p-5 border border-slate-200 shadow-sm flex flex-col md:flex-row items-center justify-between gap-4 mb-8">
         <div className="text-sm font-medium text-slate-500 flex items-center gap-2">
           <span>
@@ -79,8 +77,6 @@ export default function ProductGrid({
           </select>
         </div>
       </div>
-
-      {/* Grid body */}
       {loading ? (
         <div className="flex flex-col items-center justify-center py-32 bg-white rounded-3xl border border-slate-200 shadow-sm">
           <Loader2 className="w-12 h-12 animate-spin text-cyan-600 mb-4" />
@@ -145,8 +141,6 @@ export default function ProductGrid({
               );
             })}
           </div>
-
-          {/* Pagination */}
           {totalPages > 1 && (
             <div className="flex items-center justify-center gap-2 mt-12 pb-12">
               <button

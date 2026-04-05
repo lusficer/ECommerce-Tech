@@ -1,4 +1,3 @@
-// ===== src/app/cart/page.tsx =====
 'use client';
 
 import React, { useState, useEffect } from 'react';
@@ -7,7 +6,8 @@ import { ShoppingCart, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 import { CartItemResponse, CartResponse } from '@/types';
-import { getAuth } from '@/lib/auth';
+import { getAuth, logout } from '@/lib/auth';
+import { apiFetch, apiGet, apiPut, getUserFacingErrorMessage, isApiError } from '@/lib/api';
 import LoadingScreen from '@/components/ui/LoadingScreen';
 import EmptyState from '@/components/ui/EmptyState';
 import CartShopGroup from '@/components/cart/CartShopGroup';
@@ -21,40 +21,42 @@ export default function CartPage() {
   const [selectedItems, setSelectedItems] = useState<Set<number>>(new Set());
   const [shopNames, setShopNames] = useState<Record<string, string>>({});
 
-  // ─── Data fetching ──────────────────────────────────────────────────────────
+  // Fetch cart data and shop names so items can be grouped by shop.
   const fetchCart = async () => {
     const { token, userId } = getAuth();
     if (!token || !userId) { setLoading(false); return; }
 
     try {
-      const res = await fetch('http://localhost:8088/api/cart', {
-        headers: { Authorization: `Bearer ${token}`, userId },
-      });
-      if (res.ok) {
-        const cartData: CartResponse = await res.json();
-        setCart(cartData);
+      const cartData = await apiGet<CartResponse>('cart', '/api/cart');
+      setCart(cartData);
 
-        // Fetch shop names in parallel
-        const uniqueShopIds = Array.from(new Set(cartData.items.map((i) => i.shopId)));
-        const namesMap: Record<string, string> = {};
-        await Promise.all(
-          uniqueShopIds.map(async (shopId) => {
-            try {
-              const shopRes = await fetch(`http://localhost:8082/api/shops/${shopId}`, {
-                headers: { Authorization: `Bearer ${token}` },
-              });
-              namesMap[shopId] = shopRes.ok
-                ? ((await shopRes.json()).shopName ?? shopId)
-                : shopId;
-            } catch {
-              namesMap[shopId] = shopId;
-            }
-          })
-        );
-        setShopNames(namesMap);
+      // Fetch shop names in parallel
+      const uniqueShopIds = Array.from(new Set(cartData.items.map((i) => i.shopId)));
+      const namesMap: Record<string, string> = {};
+      await Promise.all(
+        uniqueShopIds.map(async (shopId) => {
+          try {
+            const shop = await apiGet<any>('shop', `/api/shops/${shopId}`, { withUserId: false });
+            namesMap[shopId] = shop?.shopName ?? shopId;
+          } catch {
+            namesMap[shopId] = shopId;
+          }
+        })
+      );
+      setShopNames(namesMap);
+    } catch (err) {
+      if (isApiError(err) && (err.status === 401 || err.status === 403)) {
+        logout();
+        toast.error('Your session has expired. Please sign in again.');
+        setCart(null);
+        return;
       }
-    } catch {
-      toast.error('Cannot load cart data. Please try again!');
+
+      toast.error(
+        getUserFacingErrorMessage(err, {
+          defaultMessage: 'Unable to load your cart right now.',
+        })
+      );
     } finally {
       setLoading(false);
     }
@@ -62,27 +64,29 @@ export default function CartPage() {
 
   useEffect(() => { fetchCart(); }, []);
 
-  // ─── Cart mutations ─────────────────────────────────────────────────────────
+  // Mutations: quantity updates and bulk delete.
   const updateQuantity = async (itemId: number, newQty: number) => {
     const { token, userId } = getAuth();
     if (!token || !userId) return;
     setUpdatingId(itemId);
     try {
-      const res = await fetch(`http://localhost:8088/api/cart/items/${itemId}`, {
-        method: 'PUT',
-        headers: { Authorization: `Bearer ${token}`, userId, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ quantity: newQty }),
-      });
-      if (res.ok) {
-        setCart(await res.json());
-        window.dispatchEvent(new Event('cartUpdated'));
-        if (newQty <= 0) {
-          toast.success('Item removed from cart!');
-          setSelectedItems((prev) => { const s = new Set(prev); s.delete(itemId); return s; });
-        }
+      const updated = await apiPut<CartResponse>('cart', `/api/cart/items/${itemId}`, { quantity: newQty });
+      setCart(updated);
+      window.dispatchEvent(new Event('cartUpdated'));
+      if (newQty <= 0) {
+        toast.success('Item removed from cart!');
+        setSelectedItems((prev) => {
+          const s = new Set(prev);
+          s.delete(itemId);
+          return s;
+        });
       }
-    } catch {
-      toast.error('Cannot connect to cart server!');
+    } catch (err) {
+      toast.error(
+        getUserFacingErrorMessage(err, {
+          defaultMessage: 'Failed to update cart item.',
+        })
+      );
     } finally {
       setUpdatingId(null);
     }
@@ -94,25 +98,24 @@ export default function CartPage() {
     if (!token || !userId) return;
     const ids = Array.from(selectedItems);
     try {
-      const res = await fetch('http://localhost:8088/api/cart/items', {
+      const updated = await apiFetch<CartResponse>('cart', '/api/cart/items', {
         method: 'DELETE',
-        headers: { Authorization: `Bearer ${token}`, userId, 'Content-Type': 'application/json' },
         body: JSON.stringify(ids),
       });
-      if (res.ok) {
-        setCart(await res.json());
-        setSelectedItems(new Set());
-        window.dispatchEvent(new Event('cartUpdated'));
-        toast.success(`Successfully removed ${ids.length} items from cart.`);
-      } else {
-        toast.error('Error occurred while removing items from cart!');
-      }
-    } catch {
-      toast.error('Cannot connect to cart server!');
+      setCart(updated);
+      setSelectedItems(new Set());
+      window.dispatchEvent(new Event('cartUpdated'));
+      toast.success(`Successfully removed ${ids.length} items from cart.`);
+    } catch (err) {
+      toast.error(
+        getUserFacingErrorMessage(err, {
+          defaultMessage: 'Failed to remove selected items from cart.',
+        })
+      );
     }
   };
 
-  // ─── Selection helpers ──────────────────────────────────────────────────────
+  // Selection helpers for bulk actions.
   const handleSelectItem = (itemId: number) =>
     setSelectedItems((prev) => {
       const s = new Set(prev);
@@ -145,7 +148,6 @@ export default function CartPage() {
     router.push('/checkout');
   };
 
-  // ─── Render ─────────────────────────────────────────────────────────────────
   if (loading) return <LoadingScreen />;
 
   if (!cart || cart.items.length === 0) {
@@ -170,31 +172,28 @@ export default function CartPage() {
 
   return (
     <div className="min-h-screen bg-slate-50 py-10 font-sans">
-      <div className="max-w-[1200px] mx-auto px-4 sm:px-6 lg:px-8">
-
-        {/* Page header */}
-        <div className="flex items-end justify-between mb-8">
+      <div className="mx-auto max-w-[1200px] px-4 sm:px-6 lg:px-8">
+        <div className="mb-8 flex items-end justify-between">
           <div>
-            <h1 className="text-3xl md:text-4xl font-black text-slate-900 tracking-tight">Shopping Cart</h1>
-            <p className="text-slate-500 mt-1 font-medium">
-              You have <span className="font-bold text-cyan-600">{cart.totalItems} items</span> in your cart
+            <h1 className="text-3xl font-black tracking-tight text-slate-900 md:text-4xl">
+              Shopping Cart
+            </h1>
+            <p className="mt-1 font-medium text-slate-500">
+              You have{' '}
+              <span className="font-bold text-cyan-600">{cart.totalItems} items</span> in your cart
             </p>
           </div>
         </div>
 
-        <div className="flex flex-col lg:flex-row gap-8 items-start">
-
-          {/* Left column */}
-          <div className="w-full lg:w-2/3 flex flex-col gap-6">
-
-            {/* Select-all / bulk-delete bar */}
-            <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm flex items-center justify-between">
-              <label className="flex items-center gap-3 cursor-pointer select-none">
+        <div className="flex flex-col items-start gap-8 lg:flex-row">
+          <div className="flex w-full flex-col gap-6 lg:w-2/3">
+            <div className="flex items-center justify-between rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+              <label className="flex cursor-pointer select-none items-center gap-3">
                 <input
                   type="checkbox"
                   checked={isAllSelected}
                   onChange={handleSelectAll}
-                  className="w-5 h-5 rounded border-slate-300 text-cyan-600 focus:ring-cyan-500 cursor-pointer"
+                  className="h-5 w-5 cursor-pointer rounded border-slate-300 text-cyan-600 focus:ring-cyan-500"
                 />
                 <span className="font-bold text-slate-700">Select All ({cart.items.length} items)</span>
               </label>
@@ -202,14 +201,13 @@ export default function CartPage() {
               {selectedItems.size > 0 && (
                 <button
                   onClick={handleBulkDelete}
-                  className="flex items-center gap-2 text-red-500 hover:text-white hover:bg-red-500 font-bold px-4 py-2 rounded-lg transition-colors text-sm"
+                  className="flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-bold text-red-500 transition-colors hover:bg-red-500 hover:text-white"
                 >
-                  <Trash2 className="w-4 h-4" /> Delete Selected ({selectedItems.size})
+                  <Trash2 className="h-4 w-4" /> Delete Selected ({selectedItems.size})
                 </button>
               )}
             </div>
 
-            {/* Shop groups */}
             {Object.entries(groupedItems).map(([shopId, shopItems]) => (
               <CartShopGroup
                 key={shopId}
@@ -225,7 +223,6 @@ export default function CartPage() {
             ))}
           </div>
 
-          {/* Right column */}
           <div className="w-full lg:w-1/3">
             <OrderSummary
               selectedCount={selectedItems.size}
@@ -233,7 +230,6 @@ export default function CartPage() {
               onCheckout={handleProceedToCheckout}
             />
           </div>
-
         </div>
       </div>
     </div>

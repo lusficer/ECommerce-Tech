@@ -5,6 +5,9 @@ import Link from 'next/link';
 import { Zap, Heart, CheckCircle2, ShoppingCart, ArrowRight, Flame, Sparkles } from 'lucide-react';
 import toast from 'react-hot-toast';
 
+import { logout } from '@/lib/auth';
+import { apiGet, apiPost, getUserFacingErrorMessage, isApiError } from '@/lib/api';
+
 interface FlashProduct {
   productId: string;
   name: string;
@@ -26,14 +29,9 @@ export default function FlashSale() {
     if (!token || !userId) return;
 
     try {
-      const res = await fetch(`http://localhost:8081/api/wishlists/${userId}`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (res.ok) {
-        const data = await res.json();
-        const ids = new Set<string>(data.map((item: any) => item.productId));
-        setWishlistedIds(ids);
-      }
+      const data = await apiGet<any[]>('user', `/api/wishlists/${userId}`, { withUserId: false });
+      const ids = new Set<string>((data ?? []).map((item: any) => item.productId));
+      setWishlistedIds(ids);
     } catch (err) {
       console.error("Error loading homepage wishlist:", err);
     }
@@ -43,20 +41,18 @@ export default function FlashSale() {
     const fetchTabProducts = async () => {
       setLoading(true);
       try {
-        let url = '';
+        let path = '';
         if (activeTab === 'sale') {
-          url = 'http://localhost:8083/api/internal/products/filter?size=4&sort=discount_desc';
+          path = '/api/internal/products/filter?size=4&sort=discount_desc';
         } else if (activeTab === 'new') {
-          url = 'http://localhost:8083/api/internal/products/filter?size=4&sort=latest'; 
+          path = '/api/internal/products/filter?size=4&sort=latest';
         } else if (activeTab === 'best') {
-          url = 'http://localhost:8083/api/internal/products/trending'; 
+          path = '/api/internal/products/trending';
         }
 
-        const res = await fetch(url);
-        if (!res.ok) throw new Error("Failed to fetch products");
-        
-        const data = await res.json();
-        setProducts(data.content ? data.content.slice(0, 4) : data.slice(0, 4));
+        const data = await apiGet<any>('product', path, { withAuth: false, withUserId: false });
+        const list = Array.isArray(data) ? data : data?.content;
+        setProducts((list ?? []).slice(0, 4));
       } catch (error) {
         console.error("Error loading homepage data:", error);
       } finally {
@@ -79,38 +75,34 @@ export default function FlashSale() {
     const userId = localStorage.getItem('userId');
 
     if (!token || !userId) {
-      toast.error("Vui lòng đăng nhập để thêm vào giỏ hàng!");
+      toast.error('Please log in to add items to your cart.');
       return;
     }
 
     try {
-      const res = await fetch(`http://localhost:8088/api/cart/add`, {
-        method: 'POST',
-        headers: { 
-          'Authorization': `Bearer ${token}`, 
-          'Content-Type': 'application/json',
-          'userId': userId
-        },
-        body: JSON.stringify({ productId: productId, quantity: 1 })
-      });
+      await apiPost('cart', '/api/cart/add', { productId: productId, quantity: 1 });
 
-      if (!res.ok) {
-        const errorText = await res.text();
-        toast.error(errorText || "Lỗi khi thêm vào giỏ hàng!");
-        return;
-      }
-
-      toast.success("Đã thêm vào giỏ hàng!");
+      toast.success('Added to cart!');
       window.dispatchEvent(new Event('cartUpdated'));
 
-      fetch(`http://localhost:8090/api/recommendations/track`, {
-         method: 'POST',
-         headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-         body: JSON.stringify({ productId: productId, actionType: 'ADD_TO_CART' })
-      }).catch(() => {});
+      apiPost(
+        'recommendation',
+        '/api/recommendations/track',
+        { productId: productId, actionType: 'ADD_TO_CART' },
+        { withUserId: false }
+      ).catch(() => {});
 
     } catch (err) {
-      toast.error("Không thể kết nối đến máy chủ giỏ hàng.");
+      if (isApiError(err) && (err.status === 401 || err.status === 403)) {
+        logout();
+        toast.error('Your session has expired. Please sign in again.');
+        return;
+      }
+      toast.error(
+        getUserFacingErrorMessage(err, {
+          defaultMessage: 'Failed to add item to cart.',
+        })
+      );
     }
   };
 
@@ -119,25 +111,32 @@ export default function FlashSale() {
     const token = localStorage.getItem('accessToken') || localStorage.getItem('token');
     const userId = localStorage.getItem('userId');
     
-    if (!token || !userId) { toast.error("Please log in!"); return; }
+    if (!token || !userId) { toast.error('Please sign in to manage your wishlist.'); return; }
 
     try {
-      const res = await fetch(`http://localhost:8081/api/wishlists/${userId}/${productId}`, {
-        method: 'POST', headers: { 'Authorization': `Bearer ${token}` }
+      await apiPost('user', `/api/wishlists/${userId}/${productId}`, undefined, { withUserId: false });
+      const isNowWishlisted = !wishlistedIds.has(productId);
+      toast.success(isNowWishlisted ? 'Added to wishlist!' : 'Removed from wishlist!');
+
+      setWishlistedIds(prev => {
+        const newSet = new Set(prev);
+        if (isNowWishlisted) newSet.add(productId);
+        else newSet.delete(productId);
+        return newSet;
       });
-      if (res.ok) {
-        const isNowWishlisted = !wishlistedIds.has(productId);
-        toast.success(isNowWishlisted ? "Added to Wishlist!" : "Removed from Wishlist!");
-        
-        setWishlistedIds(prev => {
-          const newSet = new Set(prev);
-          if (isNowWishlisted) newSet.add(productId);
-          else newSet.delete(productId);
-          return newSet;
-        });
-        window.dispatchEvent(new Event('wishlistUpdated'));
+      window.dispatchEvent(new Event('wishlistUpdated'));
+    } catch (err) {
+      if (isApiError(err) && (err.status === 401 || err.status === 403)) {
+        logout();
+        toast.error('Your session has expired. Please sign in again.');
+        return;
       }
-    } catch (err) { toast.error("Server connection error."); }
+      toast.error(
+        getUserFacingErrorMessage(err, {
+          defaultMessage: 'Failed to update your wishlist.',
+        })
+      );
+    }
   };
 
   const getSeeMoreLink = () => {
@@ -148,8 +147,7 @@ export default function FlashSale() {
 
   return (
     <section className="w-full mt-12 bg-white rounded-3xl overflow-hidden shadow-sm border border-slate-100 flex flex-col md:flex-row min-h-[480px]">
-      
-      {/* Left Sidebar */}
+
       <div className="w-full md:w-[320px] bg-slate-900 p-8 flex flex-col items-center justify-center relative overflow-hidden shrink-0">
         <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent z-0"></div>
         <div className="relative z-10 w-full text-center">
@@ -177,7 +175,6 @@ export default function FlashSale() {
         <div className={`absolute -bottom-10 right-0 w-48 h-48 rounded-full blur-3xl z-0 pointer-events-none transition-colors duration-700 ${activeTab === 'sale' ? 'bg-orange-500/20' : activeTab === 'new' ? 'bg-blue-500/20' : 'bg-red-500/20'}`}></div>
       </div>
 
-      {/* Right Product Grid */}
       <div className="flex-1 p-6 md:p-8 bg-slate-50 flex flex-col">
         {loading ? (
           <div className="flex-1 flex items-center justify-center">
@@ -226,12 +223,10 @@ export default function FlashSale() {
 
                     <div className="flex items-center justify-between mt-2 pt-4 border-t border-slate-50">
                       <div className="flex items-center gap-1.5">
-                        {/* Mặc định hiển thị Available để UI đẹp mắt */}
                         <CheckCircle2 className="w-4 h-4 text-green-500" />
                         <span className="text-[11px] font-bold text-slate-500">Available</span>
                       </div>
                       
-                      {/* Bỏ thuộc tính disabled, cho phép click thoải mái */}
                       <button onClick={(e) => handleAddToCart(e, product.productId)} className="w-8 h-8 rounded-full flex items-center justify-center transition-all bg-slate-900 text-white hover:bg-cyan-600 hover:scale-110 shadow-md">
                         <ShoppingCart className="w-4 h-4" />
                       </button>

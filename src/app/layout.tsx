@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 import "./globals.css";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
-// 1. Import Toaster
 import { Toaster } from 'react-hot-toast';
 
 export const metadata: Metadata = {
@@ -25,8 +24,6 @@ export default function RootLayout({
         </div>
         
         <Footer />
-
-        {/* 2. Đặt Toaster ở đây, cấu hình màu sắc cho hợp với TechStone */}
         <Toaster 
           position="top-center"
           toastOptions={{
@@ -38,7 +35,7 @@ export default function RootLayout({
             },
             success: {
               style: {
-                background: '#0891b2', // Màu cyan-600
+                background: '#0891b2', // cyan-600
               },
             },
           }}

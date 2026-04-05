@@ -5,6 +5,8 @@ import Link from 'next/link';
 import { EyeOff, MonitorSmartphone, Loader2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
+import { apiPost, getUserFacingErrorMessage } from '@/lib/api';
+import { getUserRole } from '@/lib/auth';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -20,45 +22,36 @@ export default function LoginPage() {
     setError('');
 
     try {
-      const response = await fetch('http://localhost:8081/api/auth/login', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ email, password }),
-      });
-
-      if (!response.ok) {
-        let errorMessage = 'Login failed. Please check your credentials!';
-        try {
-          const errData = await response.json();
-          if (errData && errData.error) {
-            errorMessage = errData.error;
-          }
-        } catch (parseErr) {
-        }
-        
-       
-        
-        throw new Error(errorMessage);
-      }
-      // ---------------------------------------------------------
-
-      const data = await response.json();
+      const data = await apiPost<any>(
+        'user',
+        '/api/auth/login',
+        { email, password },
+        { withAuth: false, withUserId: false }
+      );
       if (data.accessToken) {
         localStorage.setItem('accessToken', data.accessToken);
       }
       if (data.userId) {
-        localStorage.setItem('userId', data.userId);    
- 
-        localStorage.setItem('role', data.userId); 
-      }      
+        localStorage.setItem('userId', data.userId);
+
+        // Store a real role for role-based routing.
+        const role = await getUserRole(data.userId);
+        if (role) localStorage.setItem('role', role);
+      }
+
+      // Notify header/user menu to refresh immediately.
+      window.dispatchEvent(new Event('authUpdated'));
       
       toast.success('Login successful! Redirecting...');
-      window.location.href = '/';      
+      router.push('/');
       
     } catch (err: any) {
-      setError(err.message);
+      setError(
+        getUserFacingErrorMessage(err, {
+          context: 'login',
+          defaultMessage: 'Login failed. Please try again.',
+        })
+      );
     } finally {
       setLoading(false);
     }
@@ -71,8 +64,7 @@ export default function LoginPage() {
       </div>
 
       <div className="bg-white rounded-[2rem] shadow-sm border border-slate-200 overflow-hidden flex flex-col md:flex-row max-w-5xl mx-auto min-h-[550px]">
-        
-        {/* Left Side */}
+
         <div className="hidden md:flex w-1/2 bg-slate-50 p-12 flex-col items-center justify-center relative border-r border-slate-100">
            <div className="absolute inset-0 bg-gradient-to-br from-cyan-50 to-slate-100 z-0"></div>
            <MonitorSmartphone className="w-48 h-48 text-cyan-200 relative z-10 drop-shadow-md" strokeWidth={1} />
@@ -81,12 +73,10 @@ export default function LoginPage() {
            </h3>
         </div>
 
-        {/* Right Side - Form */}
         <div className="w-full md:w-1/2 p-10 md:p-16 flex flex-col justify-center">
           <h1 className="text-3xl font-black text-cyan-600 mb-1">Welcome Back</h1>
           <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-8">Login to continue</p>
 
-          {/* Khung hiển thị lỗi */}
           {error && (
             <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-600 text-sm rounded-lg font-medium animate-in fade-in slide-in-from-top-2">
               {error}

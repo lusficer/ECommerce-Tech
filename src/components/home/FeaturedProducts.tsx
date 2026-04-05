@@ -5,6 +5,8 @@ import { ArrowRight, Loader2, Image as ImageIcon } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 
+import { apiGet } from '@/lib/api';
+
 interface ProductInternalDto {
   productId: string;
   name: string;
@@ -23,11 +25,12 @@ export default function FeaturedProducts() {
   useEffect(() => {
     const fetchTrendingProducts = async () => {
       try {
-        const response = await fetch('http://localhost:8083/api/internal/products/trending');
-        if (response.ok) {
-          const data = await response.json();
-          setProducts(data.slice(0, 5));
-        }
+        const data = await apiGet<ProductInternalDto[]>(
+          'product',
+          '/api/internal/products/trending',
+          { withAuth: false, withUserId: false }
+        );
+        setProducts((data ?? []).slice(0, 5));
       } catch (error) {
         console.error('Error loading products:', error);
       } finally {
@@ -104,7 +107,6 @@ export default function FeaturedProducts() {
                     <span className="text-lg font-black text-cyan-600">
                       {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(salePrice)}
                     </span>
-                    {/* [ĐÃ SỬA LỖI DÍNH SỐ 0 Ở GIÁ CŨ] */}
                     {hasDiscount ? (
                         <span className="text-xs font-medium text-slate-400 line-through mt-0.5">
                           {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(product.price)}
@@ -114,7 +116,7 @@ export default function FeaturedProducts() {
 
                   <div className="mt-auto bg-slate-50 border border-slate-100 rounded-lg p-2.5">
                     <p className="text-[11px] text-slate-600 leading-relaxed line-clamp-3">
-                      Trả góp 0% trên giá {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(salePrice)}. Tặng kèm gói bảo hành rơi vỡ 6 tháng. Miễn phí vận chuyển.
+                      0% installment on {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(salePrice)}. Includes 6-month accidental damage warranty. Free shipping.
                     </p>
                   </div>
                 </div>

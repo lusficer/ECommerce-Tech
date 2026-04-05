@@ -10,25 +10,18 @@ export default function HeroSection() {
   return (
     <section className="w-full font-sans mb-12">
       <div className="grid grid-cols-1 md:grid-cols-12 gap-5 md:h-[520px]">
-        
-        {/* ========================================================= */}
-        {/* BANNER CHÍNH: LAPTOP (Ảnh chất lượng cao + Gradient mờ)  */}
-        {/* ========================================================= */}
         <div 
           onClick={() => router.push('/products?category=CAT_LAPTOP')}
           className="md:col-span-8 relative rounded-3xl overflow-hidden bg-slate-900 group h-[400px] md:h-full flex flex-col justify-center p-8 md:p-14 cursor-pointer border border-slate-200 hover:shadow-2xl transition-all duration-500"
         >
-          {/* Ảnh nền Laptop */}
           <img 
             src="https://images.unsplash.com/photo-1603302576837-37561b2e2302?q=80&w=2068&auto=format&fit=crop" 
             alt="Premium Laptops" 
             className="absolute inset-0 w-full h-full object-cover object-right group-hover:scale-105 transition-transform duration-700"
           />
           
-          {/* Lớp phủ Gradient (Đậm ở bên trái để đọc chữ, mờ dần sang phải để thấy ảnh) */}
           <div className="absolute inset-0 bg-gradient-to-r from-slate-900 via-slate-900/80 to-transparent"></div>
 
-          {/* Nội dung Text */}
           <div className="relative z-10 max-w-xl">
             <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-800/80 border border-slate-700 backdrop-blur-md mb-6">
               <Zap className="w-4 h-4 text-cyan-400 fill-cyan-400" />
@@ -48,24 +41,16 @@ export default function HeroSection() {
             </button>
           </div>
         </div>
-
-        {/* ========================================================= */}
-        {/* 2 BANNER PHỤ: SMARTPHONE & ACCESSORIES                   */}
-        {/* ========================================================= */}
         <div className="md:col-span-4 flex flex-col gap-5">
-          
-          {/* Banner Phụ 1: SMARTPHONES */}
           <div 
             onClick={() => router.push('/products?category=CAT_PHONE')}
             className="flex-1 relative rounded-3xl overflow-hidden bg-slate-100 shadow-sm border border-slate-200 group p-8 cursor-pointer flex flex-col justify-end hover:shadow-xl transition-all"
           >
-            {/* Ảnh nền Điện thoại */}
             <img 
               src="https://images.unsplash.com/photo-1610945265064-0e34e5519bbf?q=80&w=2070&auto=format&fit=crop" 
               alt="Smartphones" 
               className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
             />
-            {/* Lớp phủ tối từ dưới lên */}
             <div className="absolute inset-0 bg-gradient-to-t from-slate-900/90 via-slate-900/40 to-transparent"></div>
             
             <div className="relative z-10">
@@ -75,18 +60,15 @@ export default function HeroSection() {
             </div>
           </div>
 
-          {/* Banner Phụ 2: ACCESSORIES (Bàn phím/Setup) */}
           <div 
             onClick={() => router.push('/products?category=CAT_ACCESSORY')}
             className="flex-1 relative rounded-3xl overflow-hidden bg-slate-900 shadow-sm border border-slate-200 group p-8 cursor-pointer flex flex-col justify-end hover:shadow-xl transition-all"
           >
-            {/* Ảnh nền Bàn phím cơ */}
             <img 
               src="https://images.unsplash.com/photo-1595225476474-87563907a212?q=80&w=2071&auto=format&fit=crop" 
               alt="Accessories" 
               className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
             />
-            {/* Lớp phủ tối từ dưới lên */}
             <div className="absolute inset-0 bg-gradient-to-t from-slate-900/90 via-slate-900/40 to-transparent"></div>
 
             <div className="relative z-10">

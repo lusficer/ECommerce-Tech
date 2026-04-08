@@ -13,6 +13,7 @@ import { getAuth } from '@/lib/auth';
 import { formatCurrency } from '@/lib/format';
 import LoadingScreen from '@/components/ui/LoadingScreen';
 import { apiGet, apiPost, getUserFacingErrorMessage } from '@/lib/api';
+import { loadManagedShops } from '@/lib/shop';
 
 interface ForecastResult {
   productId: string;
@@ -199,26 +200,10 @@ export default function InventoryForecastPage() {
 
     const fetchShops = async () => {
       try {
-        if (role.startsWith('SHOP_MNG') || role.includes('MANAGER')) {
-          const data = await apiGet<any | any[]>(
-            'shop',
-            `/api/shops/owner/${userId}`,
-            { withUserId: false }
-          );
-          const list = Array.isArray(data) ? data : [data];
-          if (list.length > 0) {
-            setShops(list);
-            setShopId(list[0].shopId);
-          }
-        } else {
-          const list = await apiGet<any[]>(
-            'shop',
-            '/api/shops/my-assigned-shops'
-          );
-          if (list.length > 0) {
-            setShops(list);
-            setShopId(list[0].shopId);
-          }
+        const list = await loadManagedShops(userId, role);
+        if (list.length > 0) {
+          setShops(list);
+          setShopId(list[0].shopId);
         }
       } catch (err) {
         toast.error(

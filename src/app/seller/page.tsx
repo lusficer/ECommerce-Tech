@@ -7,6 +7,7 @@ import toast from 'react-hot-toast';
 
 import { getAuth, logout } from '@/lib/auth';
 import { apiDelete, apiGet, apiPost, apiPut, getUserFacingErrorMessage, isApiError } from '@/lib/api';
+import { loadManagedShops } from '@/lib/shop';
 import LoadingScreen from '@/components/ui/LoadingScreen';
 import Sidebar from '@/components/seller/Sidebar';
 import DashboardTab from '@/components/seller/DashboardTab';
@@ -33,7 +34,7 @@ export default function SellerDashboard() {
   const [role, setRole]         = useState<Role | null>(null);
   const [userId, setUserId]     = useState('');
   const [activeTab, setActiveTab]     = useState('dashboard');
-  const [shopData, setShopData]       = useState({ shopId: '', shopName: '', address: '', description: '', logoUrl: '', status: '' });
+  const [shopData, setShopData]       = useState<Shop>({ shopId: '', shopName: '', status: '' });
   const [saving, setSaving]           = useState(false);
   const [myProducts, setMyProducts]   = useState<any[]>([]);
   const [approvalQueue, setApprovalQueue] = useState<any[]>([]);
@@ -42,6 +43,7 @@ export default function SellerDashboard() {
   const [vendorShops, setVendorShops]   = useState<{ shopId: string; shopName: string }[]>([]);
   const [settingsLoading, setSettingsLoading] = useState(false);
   const [settingsSaving, setSettingsSaving] = useState(false);
+  const [removingVendor, setRemovingVendor] = useState(false);
   const [settingsShop, setSettingsShop] = useState<Shop | null>(null);
   const [settingsForm, setSettingsForm] = useState<UpdateShopProfileRequest>({
     shopName: '',
@@ -91,7 +93,7 @@ export default function SellerDashboard() {
         try {
           const shops = await apiGet<any[]>('shop', '/api/shops/my-assigned-shops', {
             withAuth: true,
-            withUserId: true,
+            withUserId: false,
           });
           if (shops?.length > 0) {
             const firstShopId = shops[0].shopId;
@@ -138,7 +140,7 @@ export default function SellerDashboard() {
 
   const fetchShopData = async (ownerId: string, r: string) => {
     try {
-      const shops = await apiGet<any[]>('shop', `/api/shops/owner/${encodeURIComponent(ownerId)}`);
+      const shops = await loadManagedShops(ownerId, r);
       if (shops?.length > 0) {
         setShopData(shops[0]);
         if (r === 'MANAGER') {
@@ -341,6 +343,15 @@ export default function SellerDashboard() {
   const handleTabChange = (tab: string) => { setActiveTab(tab); setShowProductForm(false); };
 
   const settingsShopId = role === 'VENDOR' ? vendorShopId : shopData.shopId;
+  const assignedVendorId =
+    (settingsShop as any)?.vendorId ||
+    (settingsShop as any)?.assignedVendorId ||
+    (settingsShop as any)?.currentVendorId ||
+    (settingsShop as any)?.vendor?.vendorId ||
+    (settingsShop as any)?.vendor?.id ||
+    (settingsShop as any)?.assignedVendor?.vendorId ||
+    '';
+  const hasAssignedVendor = Boolean(String(assignedVendorId).trim());
 
   useEffect(() => {
     if (activeTab !== 'settings') return;
@@ -432,6 +443,51 @@ export default function SellerDashboard() {
       }
     } finally {
       setSettingsSaving(false);
+    }
+  };
+
+  const removeVendorFromShop = async () => {
+    if (role !== 'MANAGER') {
+      toast.error('Only Shop Manager can remove vendor from a shop.');
+      return;
+    }
+    if (!settingsShopId) {
+      toast.error('No shop selected.');
+      return;
+    }
+
+    const confirmed = window.confirm(
+      'Remove current vendor from this shop? This should be used when you need to re-assign a new vendor.'
+    );
+    if (!confirmed) return;
+
+    setRemovingVendor(true);
+    try {
+      await apiDelete('shop', `/api/shops/${encodeURIComponent(settingsShopId)}/vendor`, undefined, {
+        withUserId: false,
+      });
+      toast.success('Vendor removed from shop successfully.');
+
+      const shop = await apiGet<Shop>('shop', `/api/shops/${settingsShopId}`);
+      setSettingsShop(shop);
+      setSettingsForm({
+        shopName: shop.shopName || '',
+        description: shop.description || '',
+        logoUrl: shop.logoUrl || '',
+        address: shop.address || '',
+        phone: shop.phone || '',
+        warehouseAddress: shop.warehouseAddress || '',
+        warehouseCity: shop.warehouseCity || '',
+        warehouseDistrict: shop.warehouseDistrict || '',
+        warehouseWard: shop.warehouseWard || '',
+        warehousePhone: shop.warehousePhone || '',
+      });
+    } catch (e: any) {
+      if (!handleSessionExpired(e)) {
+        toast.error(getUserFacingErrorMessage(e, { defaultMessage: 'Failed to remove vendor from shop.' }));
+      }
+    } finally {
+      setRemovingVendor(false);
     }
   };
 
@@ -558,6 +614,24 @@ export default function SellerDashboard() {
                 <div className="text-slate-500">No shop selected.</div>
               ) : (
                 <div className="max-w-3xl space-y-6">
+                  {role === 'MANAGER' && (
+                    <div className={`p-5 rounded-2xl border ${hasAssignedVendor ? 'border-green-200 bg-green-50' : 'border-amber-200 bg-amber-50'}`}>
+                      <p className="text-xs font-black uppercase tracking-widest mb-2 text-slate-500">Vendor Assignment Status</p>
+                      <div className="flex items-center gap-3">
+                        <span
+                          className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-black uppercase tracking-wide ${
+                            hasAssignedVendor ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'
+                          }`}
+                        >
+                          {hasAssignedVendor ? 'Assigned' : 'No vendor assigned'}
+                        </span>
+                        {hasAssignedVendor && (
+                          <span className="text-sm font-bold text-slate-700">Vendor ID: {assignedVendorId}</span>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
                   <div className="p-5 rounded-2xl border border-slate-200 bg-slate-50">
                     <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-2">Note</p>
                     <p className="text-sm text-slate-600">
@@ -677,6 +751,23 @@ export default function SellerDashboard() {
                       {settingsSaving ? 'SAVING...' : 'SAVE CHANGES'}
                     </button>
                   </div>
+
+                  {role === 'MANAGER' && (
+                    <div className="p-6 rounded-3xl border border-red-200 bg-red-50/60">
+                      <p className="text-xs font-black text-red-500 uppercase tracking-widest mb-2">Vendor Assignment</p>
+                      <p className="text-sm text-slate-700 mb-4">
+                        Remove vendor from this shop before assigning a new vendor.
+                      </p>
+                      <button
+                        onClick={removeVendorFromShop}
+                        disabled={removingVendor}
+                        className="px-5 py-2.5 bg-red-600 hover:bg-red-700 disabled:bg-red-300 text-white text-sm font-black rounded-xl transition-colors flex items-center gap-2"
+                      >
+                        {removingVendor && <span className="w-4 h-4 border-2 border-white/70 border-t-white rounded-full animate-spin" />}
+                        {removingVendor ? 'REMOVING...' : 'REMOVE VENDOR'}
+                      </button>
+                    </div>
+                  )}
                 </div>
               )}
             </div>

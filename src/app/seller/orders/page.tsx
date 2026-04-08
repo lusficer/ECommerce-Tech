@@ -3,12 +3,13 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
-import { apiGet, apiPut, getUserFacingErrorMessage, isApiError } from '@/lib/api';
+import { apiGet, apiPost, apiPut, getUserFacingErrorMessage, isApiError } from '@/lib/api';
 import { logout } from '@/lib/auth';
+import type { AvailableShipperDTO, ShippingResponseDTO } from '@/types';
 import { 
-  Package, Truck, Clock, 
+  Package, Truck, Clock,
   Search, Filter, Loader2, Store, ChevronRight, ChevronDown,
-  X, MapPin, User, Phone, Receipt
+  X, MapPin, User, Phone, Receipt, Layers3, Warehouse, ShieldCheck
 } from 'lucide-react';
 
 const TABS = [
@@ -22,10 +23,13 @@ const TABS = [
   { id: 'RETURNED', label: 'Returned' }
 ];
 
+type OrderScope = 'ALL_SHOPS' | 'SHOP';
+
 export default function VendorOrdersPage() {
   const router = useRouter();
   
   const [assignedShops, setAssignedShops] = useState<any[]>([]);
+  const [orderScope, setOrderScope] = useState<OrderScope>('ALL_SHOPS');
   const [selectedShopId, setSelectedShopId] = useState<string>('');
   const [isFetchingShops, setIsFetchingShops] = useState(true);
 
@@ -33,11 +37,68 @@ export default function VendorOrdersPage() {
   const [loadingOrders, setLoadingOrders] = useState(false);
   const [activeTab, setActiveTab] = useState('ALL');
   const [updatingId, setUpdatingId] = useState<string | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
 
   const [detailModal, setDetailModal] = useState<{isOpen: boolean, order: any}>({
     isOpen: false,
     order: null
   });
+
+  const [shippingInfo, setShippingInfo] = useState<ShippingResponseDTO | null>(null);
+  const [shippingInfoLoading, setShippingInfoLoading] = useState(false);
+  const [orderPhotos, setOrderPhotos] = useState<any[]>([]);
+  const [orderPhotosLoading, setOrderPhotosLoading] = useState(false);
+
+  const [assignModal, setAssignModal] = useState<{ isOpen: boolean; orderId: string; shopId: string; orderStatus: string }>({
+    isOpen: false,
+    orderId: '',
+    shopId: '',
+    orderStatus: '',
+  });
+  const [availableShippers, setAvailableShippers] = useState<AvailableShipperDTO[]>([]);
+  const [selectedShipperId, setSelectedShipperId] = useState('');
+  const [loadingShippers, setLoadingShippers] = useState(false);
+  const [assigningShipper, setAssigningShipper] = useState(false);
+
+  const resolvedShipping = ((shippingInfo as any)?.shipping as any) || shippingInfo || null;
+  const shippingShipperId =
+    (shippingInfo as any)?.shipperId ||
+    (resolvedShipping as any)?.shipperId ||
+    'N/A';
+
+  const shippingPickupText = [
+    (resolvedShipping as any)?.pickupAddress,
+    (resolvedShipping as any)?.pickupWard,
+    (resolvedShipping as any)?.pickupDistrict,
+    (resolvedShipping as any)?.pickupCity,
+  ].filter(Boolean).join(', ') || 'N/A';
+
+  const shippingDeliveryText = [
+    (resolvedShipping as any)?.deliveryAddress,
+    (resolvedShipping as any)?.deliveryWard,
+    (resolvedShipping as any)?.deliveryDistrict,
+    (resolvedShipping as any)?.deliveryCity,
+  ].filter(Boolean).join(', ') || 'N/A';
+
+  useEffect(() => {
+    if (!detailModal.isOpen || !detailModal.order) {
+      setShippingInfo(null);
+      setOrderPhotos([]);
+      return;
+    }
+
+    loadShippingInfo(detailModal.order.orderId);
+    loadOrderPhotos(detailModal.order.orderId);
+  }, [detailModal.isOpen, detailModal.order]);
+
+  useEffect(() => {
+    if (!assignModal.isOpen) {
+      setAvailableShippers([]);
+      setSelectedShipperId('');
+      return;
+    }
+    loadAvailableShippers();
+  }, [assignModal.isOpen]);
 
   const vendorId = typeof window !== 'undefined' ? localStorage.getItem('userId') || '' : '';
 
@@ -52,7 +113,7 @@ export default function VendorOrdersPage() {
       try {
         const data = await apiGet<any[]>('shop', `/api/shops/my-assigned-shops`, {
           withAuth: true,
-          withUserId: true,
+          withUserId: false,
         });
         setAssignedShops(data);
         if (data.length > 0) {
@@ -78,19 +139,21 @@ export default function VendorOrdersPage() {
   }, [vendorId, router]);
 
   useEffect(() => {
-    if (selectedShopId) {
-      fetchVendorOrders(selectedShopId, activeTab);
-    }
-  }, [selectedShopId, activeTab]);
+    fetchVendorOrders(orderScope, selectedShopId, activeTab);
+  }, [orderScope, selectedShopId, activeTab]);
 
-  const fetchVendorOrders = async (shopId: string, tab: string) => {
+  const fetchVendorOrders = async (scope: OrderScope, shopId: string, tab: string) => {
     setLoadingOrders(true);
     try {
       const qs = tab !== 'ALL' ? `?status=${encodeURIComponent(tab)}` : '';
+      const basePath =
+        scope === 'SHOP' && shopId
+          ? `/api/vendor/orders/shop/${encodeURIComponent(shopId)}`
+          : '/api/vendor/orders';
       const data = await apiGet<any[]>(
         'order',
-        `/api/vendor/orders/${encodeURIComponent(shopId)}${qs}`,
-        { userIdHeader: 'Vendor_Id' }
+        `${basePath}${qs}`,
+        { withUserId: false }
       );
       setOrders(data);
     } catch (err) {
@@ -115,10 +178,10 @@ export default function VendorOrdersPage() {
         'order',
         `/api/vendor/orders/${encodeURIComponent(orderId)}/status`,
         { shopId: selectedShopId, newStatus },
-        { userIdHeader: 'Vendor_Id' }
+        { withUserId: false }
       );
       toast.success(`Successfully updated order to ${newStatus.replace(/_/g, ' ')}!`);
-      fetchVendorOrders(selectedShopId, activeTab);
+      fetchVendorOrders(orderScope, selectedShopId, activeTab);
     } catch (err) {
       if (isApiError(err) && (err.status === 401 || err.status === 403)) {
         logout();
@@ -130,6 +193,118 @@ export default function VendorOrdersPage() {
     } finally {
       setUpdatingId(null);
     }
+  };
+
+  const loadAvailableShippers = async () => {
+    setLoadingShippers(true);
+    try {
+      const data = await apiGet<AvailableShipperDTO[]>('order', '/api/vendor/orders/shippers/available', {
+        withUserId: false,
+      });
+      setAvailableShippers(data || []);
+      if (data?.length) {
+        setSelectedShipperId(data[0].shipperId);
+      }
+    } catch (err) {
+      if (isApiError(err) && (err.status === 401 || err.status === 403)) {
+        logout();
+        toast.error('Your session has expired. Please sign in again.');
+        router.push('/login');
+        return;
+      }
+      toast.error(getUserFacingErrorMessage(err, { defaultMessage: 'Failed to load available shippers.' }));
+    } finally {
+      setLoadingShippers(false);
+    }
+  };
+
+  const handleAssignShipper = async () => {
+    if (assignModal.orderStatus !== 'PROCESSING') {
+      toast.error('Only PROCESSING orders can be assigned to shipper.');
+      return;
+    }
+    if (!selectedShipperId) {
+      toast.error('Please select a shipper.');
+      return;
+    }
+
+    setAssigningShipper(true);
+    try {
+      await apiPost(
+        'order',
+        `/api/vendor/orders/${encodeURIComponent(assignModal.orderId)}/assign-shipper`,
+        { shipperId: selectedShipperId },
+        { withUserId: false }
+      );
+      toast.success('Shipper assigned successfully.');
+      setAssignModal({ isOpen: false, orderId: '', shopId: '', orderStatus: '' });
+      fetchVendorOrders(orderScope, selectedShopId, activeTab);
+    } catch (err) {
+      if (isApiError(err) && (err.status === 401 || err.status === 403)) {
+        logout();
+        toast.error('Your session has expired. Please sign in again.');
+        router.push('/login');
+        return;
+      }
+      toast.error(getUserFacingErrorMessage(err, { defaultMessage: 'Failed to assign shipper.' }));
+    } finally {
+      setAssigningShipper(false);
+    }
+  };
+
+  const loadShippingInfo = async (orderId: string) => {
+    setShippingInfoLoading(true);
+    setShippingInfo(null);
+    try {
+      const data = await apiGet<ShippingResponseDTO>(
+        'order',
+        `/api/vendor/orders/${encodeURIComponent(orderId)}/shipping-info`,
+        { withUserId: false }
+      );
+      setShippingInfo(data);
+    } catch (err) {
+      setShippingInfo(null);
+      if (!isApiError(err) || (err.status !== 404 && err.status !== 403)) {
+        toast.error(getUserFacingErrorMessage(err, { defaultMessage: 'Failed to load shipping info.' }));
+      }
+    } finally {
+      setShippingInfoLoading(false);
+    }
+  };
+
+  const loadOrderPhotos = async (orderId: string) => {
+    setOrderPhotosLoading(true);
+    setOrderPhotos([]);
+    try {
+      const data = await apiGet<any[]>('order', `/api/vendor/orders/${encodeURIComponent(orderId)}/photos`, {
+        withUserId: false,
+      });
+      setOrderPhotos(Array.isArray(data) ? data : []);
+    } catch (err) {
+      setOrderPhotos([]);
+      if (!isApiError(err) || (err.status !== 404 && err.status !== 403)) {
+        toast.error(getUserFacingErrorMessage(err, { defaultMessage: 'Failed to load delivery photos.' }));
+      }
+    } finally {
+      setOrderPhotosLoading(false);
+    }
+  };
+
+  const filteredOrders = orders.filter((order) => {
+    const term = searchTerm.trim().toLowerCase();
+    if (!term) return true;
+    return (
+      String(order.orderId || '').toLowerCase().includes(term) ||
+      String(order.shopId || '').toLowerCase().includes(term) ||
+      String(order.orderAddress?.fullName || order.userId || '').toLowerCase().includes(term)
+    );
+  });
+
+  const stats = {
+    total: orders.length,
+    shipping: orders.filter((o) => o.orderStatus === 'SHIPPING').length,
+    pending: orders.filter((o) => o.orderStatus === 'PENDING_VERIFICATION').length,
+    processing: orders.filter((o) => o.orderStatus === 'PROCESSING').length,
   };
 
   const getStatusBadge = (status: string) => {
@@ -155,19 +330,53 @@ export default function VendorOrdersPage() {
     <div className="min-h-screen bg-slate-50 font-sans pb-12 relative">
       <div className="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-sm">
         <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="py-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="py-5 flex flex-col gap-4">
             <div className="flex items-center gap-4">
               <div className="w-12 h-12 bg-cyan-50 rounded-xl flex items-center justify-center shrink-0">
                 <Store className="w-6 h-6 text-cyan-600" />
               </div>
-              <div>
+              <div className="flex-1 min-w-0">
                 <h1 className="text-xl font-black text-slate-900 leading-tight">Order Management</h1>
-                {assignedShops.length > 0 ? (
-                  <div className="relative mt-1">
-                    <select 
+                <p className="text-xs text-slate-500 mt-1">View vendor orders across all assigned shops or drill down to a single shop.</p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                <p className="text-[11px] font-black text-slate-400 uppercase tracking-wider">All Orders</p>
+                <p className="text-2xl font-black text-slate-900 mt-1">{stats.total}</p>
+              </div>
+              <div className="rounded-2xl border border-purple-100 bg-purple-50 px-4 py-3">
+                <p className="text-[11px] font-black text-purple-500 uppercase tracking-wider">Shipping</p>
+                <p className="text-2xl font-black text-purple-700 mt-1">{stats.shipping}</p>
+              </div>
+              <div className="rounded-2xl border border-orange-100 bg-orange-50 px-4 py-3">
+                <p className="text-[11px] font-black text-orange-500 uppercase tracking-wider">Pending</p>
+                <p className="text-2xl font-black text-orange-700 mt-1">{stats.pending}</p>
+              </div>
+              <div className="rounded-2xl border border-amber-100 bg-amber-50 px-4 py-3">
+                <p className="text-[11px] font-black text-amber-500 uppercase tracking-wider">Processing</p>
+                <p className="text-2xl font-black text-amber-700 mt-1">{stats.processing}</p>
+              </div>
+            </div>
+
+            <div className="flex flex-col lg:flex-row gap-3 lg:items-center lg:justify-between">
+              <div className="flex flex-wrap gap-2">
+                <button
+                  onClick={() => setOrderScope('ALL_SHOPS')}
+                  className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold transition-colors border ${orderScope === 'ALL_SHOPS' ? 'bg-cyan-600 text-white border-cyan-600' : 'bg-white text-slate-700 border-slate-200 hover:border-cyan-300'}`}
+                >
+                  <Layers3 className="w-4 h-4" /> All shops
+                </button>
+                {assignedShops.length > 0 && (
+                  <div className="relative">
+                    <select
                       value={selectedShopId}
-                      onChange={(e) => setSelectedShopId(e.target.value)}
-                      className="appearance-none bg-slate-100 border border-slate-200 text-slate-700 text-sm font-bold py-1 pl-3 pr-8 rounded-lg outline-none focus:ring-2 focus:ring-cyan-500 cursor-pointer"
+                      onChange={(e) => {
+                        setOrderScope('SHOP');
+                        setSelectedShopId(e.target.value);
+                      }}
+                      className={`appearance-none px-4 py-2.5 pr-9 rounded-xl border text-sm font-bold outline-none cursor-pointer ${orderScope === 'SHOP' ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-700 border-slate-200 hover:border-cyan-300'}`}
                     >
                       {assignedShops.map(shop => (
                         <option key={shop.shopId} value={shop.shopId}>
@@ -175,25 +384,26 @@ export default function VendorOrdersPage() {
                         </option>
                       ))}
                     </select>
-                    <ChevronDown className="w-4 h-4 text-slate-500 absolute right-2 top-1.5 pointer-events-none" />
+                    <ChevronDown className="w-4 h-4 text-slate-500 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
                   </div>
-                ) : (
-                  <p className="text-xs text-red-500 font-bold mt-1">No shop assigned</p>
                 )}
               </div>
-            </div>
-            
-            <div className="flex items-center gap-3">
-              <div className="relative">
-                <input 
-                  type="text" placeholder="Search order ID..." 
-                  className="pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:border-cyan-500 focus:ring-1 outline-none w-full sm:w-64"
-                />
-                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+
+              <div className="flex items-center gap-3">
+                <div className="relative w-full lg:w-72">
+                  <input
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    type="text"
+                    placeholder="Search order / customer / shop..."
+                    className="pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:border-cyan-500 focus:ring-1 outline-none w-full"
+                  />
+                  <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                </div>
+                <button className="p-2.5 border border-slate-200 rounded-xl text-slate-600 hover:bg-slate-50 transition-colors">
+                  <Filter className="w-4 h-4" />
+                </button>
               </div>
-              <button className="p-2 border border-slate-200 rounded-lg text-slate-600 hover:bg-slate-50 transition-colors">
-                <Filter className="w-4 h-4" />
-              </button>
             </div>
           </div>
 
@@ -216,7 +426,7 @@ export default function VendorOrdersPage() {
       </div>
 
       <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 mt-8">
-        {!selectedShopId ? (
+        {orderScope === 'SHOP' && !selectedShopId ? (
           <div className="bg-white rounded-2xl border border-slate-200 p-12 text-center">
             <Store className="w-16 h-16 text-slate-200 mx-auto mb-4" />
             <h3 className="text-xl font-bold text-slate-900">Please contact your Manager</h3>
@@ -224,15 +434,15 @@ export default function VendorOrdersPage() {
           </div>
         ) : loadingOrders ? (
           <div className="flex justify-center items-center py-20"><Loader2 className="w-8 h-8 animate-spin text-cyan-600" /></div>
-        ) : orders.length === 0 ? (
+        ) : filteredOrders.length === 0 ? (
           <div className="bg-white rounded-2xl border border-slate-200 p-12 text-center flex flex-col items-center justify-center">
             <Package className="w-16 h-16 text-slate-200 mb-4" />
             <h3 className="text-xl font-bold text-slate-900 mb-2">No orders found</h3>
-            <p className="text-slate-500">This shop has no orders in this status.</p>
+            <p className="text-slate-500">No orders match the current scope or status filter.</p>
           </div>
         ) : (
           <div className="space-y-4">
-            {orders.map((order) => {
+            {filteredOrders.map((order) => {
               const badge = getStatusBadge(order.orderStatus);
               const isUpdating = updatingId === order.orderId;
               
@@ -244,6 +454,9 @@ export default function VendorOrdersPage() {
                       <span className="text-sm font-black text-slate-900">#{order.orderId}</span>
                       <span className="text-xs font-medium text-slate-500">
                         {new Date(order.createdAt).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })}
+                      </span>
+                      <span className="px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider bg-slate-100 text-slate-600 border border-slate-200">
+                        {order.shopId}
                       </span>
                       <span className={`px-2.5 py-1 rounded-md text-xs font-bold ${badge.color}`}>
                         {badge.label}
@@ -293,6 +506,24 @@ export default function VendorOrdersPage() {
                             <Truck className="w-4 h-4" /> Handover to Shipper
                           </button>
                         )}
+                        <button
+                          disabled={order.orderStatus !== 'PROCESSING'}
+                          onClick={() =>
+                            setAssignModal({
+                              isOpen: true,
+                              orderId: order.orderId,
+                              shopId: order.shopId,
+                              orderStatus: order.orderStatus,
+                            })
+                          }
+                          className={`w-full py-2.5 font-bold rounded-xl border transition-colors text-sm flex items-center justify-center gap-2 ${
+                            order.orderStatus === 'PROCESSING'
+                              ? 'bg-indigo-600 hover:bg-indigo-700 text-white border-indigo-600'
+                              : 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed'
+                          }`}
+                        >
+                          <Truck className="w-4 h-4" /> Assign Shipper
+                        </button>
                         {order.orderStatus === 'PENDING_VERIFICATION' && (
                           <div className="w-full py-2.5 bg-orange-50 text-orange-600 font-bold rounded-xl text-sm flex items-center justify-center gap-2 border border-orange-200 cursor-not-allowed">
                             <Clock className="w-4 h-4" /> Awaiting Manager Approval
@@ -384,6 +615,98 @@ export default function VendorOrdersPage() {
                 </div>
               </div>
 
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div className="p-5 border border-slate-100 bg-slate-50/50 rounded-2xl">
+                  <h4 className="text-sm font-black text-slate-900 mb-4 flex items-center gap-2">
+                    <Warehouse className="w-5 h-5 text-cyan-600" /> Shipment Overview
+                  </h4>
+                  <div className="space-y-3 text-sm">
+                    <div className="flex justify-between items-start border-b border-slate-100 pb-3">
+                      <span className="text-slate-500 font-medium">Shop:</span>
+                      <span className="font-bold text-slate-900 text-right">{detailModal.order.shopId}</span>
+                    </div>
+                    <div className="flex justify-between items-start border-b border-slate-100 pb-3">
+                      <span className="text-slate-500 font-medium">Status:</span>
+                      <span className="font-bold text-purple-700 text-right">{detailModal.order.orderStatus}</span>
+                    </div>
+                    <div className="flex justify-between items-start pt-1">
+                      <span className="text-slate-500 font-medium">Route:</span>
+                      <span className="font-bold text-slate-900 text-right">Pickup → Delivery</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="p-5 border border-slate-100 bg-slate-50/50 rounded-2xl">
+                  <h4 className="text-sm font-black text-slate-900 mb-4 flex items-center gap-2">
+                    <ShieldCheck className="w-5 h-5 text-cyan-600" /> Shipping Info
+                  </h4>
+                  {shippingInfoLoading ? (
+                    <div className="flex items-center gap-2 text-slate-500 text-sm">
+                      <Loader2 className="w-4 h-4 animate-spin" /> Loading shipping info...
+                    </div>
+                  ) : shippingInfo ? (
+                    <div className="space-y-3 text-sm">
+                      <div className="flex justify-between items-start border-b border-slate-100 pb-3">
+                        <span className="text-slate-500 font-medium">Ship Status:</span>
+                        <span className="font-bold text-purple-700 text-right">{(resolvedShipping as any)?.status || 'N/A'}</span>
+                      </div>
+                      <div className="flex justify-between items-start border-b border-slate-100 pb-3">
+                        <span className="text-slate-500 font-medium">Shipper ID:</span>
+                        <span className="font-bold text-slate-900 text-right">{shippingShipperId}</span>
+                      </div>
+                      <div className="flex justify-between items-start border-b border-slate-100 pb-3">
+                        <span className="text-slate-500 font-medium">Pickup:</span>
+                        <span className="font-bold text-slate-900 text-right">{shippingPickupText}</span>
+                      </div>
+                      <div className="flex justify-between items-start pt-1">
+                        <span className="text-slate-500 font-medium">Delivery:</span>
+                        <span className="font-bold text-slate-900 text-right">{shippingDeliveryText}</span>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="text-slate-500 text-sm">No shipping info loaded yet. Open a shipping order or refresh details.</div>
+                  )}
+                </div>
+              </div>
+
+              <div className="p-5 border border-slate-100 bg-slate-50/50 rounded-2xl">
+                <h4 className="text-sm font-black text-slate-900 mb-4 flex items-center gap-2">
+                  <Package className="w-5 h-5 text-cyan-600" /> Delivery Photos
+                </h4>
+                {orderPhotosLoading ? (
+                  <div className="flex items-center gap-2 text-slate-500 text-sm">
+                    <Loader2 className="w-4 h-4 animate-spin" /> Loading photos...
+                  </div>
+                ) : orderPhotos.length === 0 ? (
+                  <div className="text-slate-500 text-sm">No delivery photos available.</div>
+                ) : (
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                    {orderPhotos.map((photo, idx) => {
+                      const url = photo?.photoUrl || photo?.url || '';
+                      const type = photo?.photoType || 'PHOTO';
+                      return (
+                        <a
+                          key={`${url}-${idx}`}
+                          href={url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="group block border border-slate-200 rounded-xl overflow-hidden bg-white"
+                        >
+                          <div className="aspect-square bg-slate-100">
+                            {url ? (
+                              <img src={url} alt={type} className="w-full h-full object-cover group-hover:scale-[1.02] transition-transform" />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center text-xs text-slate-400">No URL</div>
+                            )}
+                          </div>
+                          <div className="px-2 py-1.5 text-[11px] font-bold text-slate-600 text-center truncate">{type}</div>
+                        </a>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
               <div>
                 <h4 className="text-sm font-black text-slate-900 mb-4 flex items-center gap-2">
                   <Package className="w-5 h-5 text-cyan-600" /> Order Items ({detailModal.order.orderItems?.length || 0})
@@ -427,13 +750,81 @@ export default function VendorOrdersPage() {
 
             <div className="p-5 bg-slate-50 border-t border-slate-100 flex justify-end shrink-0">
               <button 
-                onClick={() => setDetailModal({ isOpen: false, order: null })}
+                onClick={() => {
+                  setDetailModal({ isOpen: false, order: null });
+                  setShippingInfo(null);
+                }}
                 className="px-8 py-3 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-xl transition-all shadow-md hover:-translate-y-0.5"
               >
                 Close Details
               </button>
             </div>
 
+          </div>
+        </div>
+      )}
+
+      {assignModal.isOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
+            <div className="px-5 py-4 border-b border-slate-100 bg-slate-50 flex items-center justify-between">
+              <h3 className="font-black text-slate-800">Assign Shipper</h3>
+              <button
+                onClick={() => setAssignModal({ isOpen: false, orderId: '', shopId: '', orderStatus: '' })}
+                className="text-slate-400 hover:text-slate-700"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4">
+              <div className="text-sm text-slate-600">
+                <p>
+                  Order: <span className="font-bold text-slate-900">#{assignModal.orderId}</span>
+                </p>
+                <p>
+                  Current status: <span className="font-bold text-slate-900">{assignModal.orderStatus || 'N/A'}</span>
+                </p>
+              </div>
+
+              {loadingShippers ? (
+                <div className="flex items-center gap-2 text-sm text-slate-500">
+                  <Loader2 className="w-4 h-4 animate-spin" /> Loading available shippers...
+                </div>
+              ) : availableShippers.length === 0 ? (
+                <div className="text-sm text-slate-500">No available shipper at the moment.</div>
+              ) : (
+                <select
+                  value={selectedShipperId}
+                  onChange={(e) => setSelectedShipperId(e.target.value)}
+                  className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-sm font-medium outline-none focus:border-cyan-500"
+                >
+                  {availableShippers.map((shipper) => (
+                    <option key={shipper.shipperId} value={shipper.shipperId}>
+                      {shipper.shipperId}
+                      {shipper.fullName ? ` - ${shipper.fullName}` : ''}
+                      {shipper.phone ? ` (${shipper.phone})` : ''}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
+
+            <div className="px-5 py-4 border-t border-slate-100 bg-slate-50 flex gap-3">
+              <button
+                onClick={() => setAssignModal({ isOpen: false, orderId: '', shopId: '', orderStatus: '' })}
+                className="flex-1 px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-700"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleAssignShipper}
+                disabled={assigningShipper || assignModal.orderStatus !== 'PROCESSING' || availableShippers.length === 0}
+                className="flex-1 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 text-white rounded-xl text-sm font-bold"
+              >
+                {assigningShipper ? 'Assigning...' : 'Assign'}
+              </button>
+            </div>
           </div>
         </div>
       )}

@@ -45,6 +45,31 @@ export default function OrderDetailsPage({ params }: { params: Promise<{ orderId
   const [showDisputeModal, setShowDisputeModal] = useState(false);
   const [isSuccessFromCheckout, setIsSuccessFromCheckout] = useState(false);
 
+  const formatStatusLabel = (value?: string) => String(value || '').replace(/_/g, ' ').trim();
+
+  const getShippingStatus = () =>
+    String(order?.shippingStatus || order?.shipStatus || order?.deliveryStatus || '')
+      .trim()
+      .toUpperCase();
+
+  const getLatestTrackingStatus = () =>
+    String(trackingLogs?.[0]?.displayStatus || trackingLogs?.[0]?.status || '')
+      .trim()
+      .toUpperCase();
+
+  const resolveDisplayStatus = () => {
+    const shippingStatus = getShippingStatus();
+    const trackingStatus = getLatestTrackingStatus();
+
+    if (shippingStatus === 'DELIVERED' || trackingStatus.includes('DELIVERED')) return 'DELIVERED';
+    if (shippingStatus === 'RETURNED' || trackingStatus.includes('RETURNED')) return 'RETURNED';
+    if (shippingStatus === 'FAILED' || shippingStatus === 'DELIVERY_FAILED' || trackingStatus.includes('FAILED')) return 'FAILED';
+    if (shippingStatus === 'PICKING_UP') return 'PICKING_UP';
+    if (shippingStatus === 'IN_TRANSIT') return 'IN_TRANSIT';
+    if (shippingStatus === 'SHIPPING') return 'SHIPPING';
+    return order?.orderStatus || '';
+  };
+
   useEffect(() => {
     if (!orderId) return;
 
@@ -187,6 +212,10 @@ export default function OrderDetailsPage({ params }: { params: Promise<{ orderId
       case 'PROCESSING':
       case 'READY_TO_SHIP':
         return { color: 'bg-yellow-50 text-yellow-600 border-yellow-200', icon: Package, label: 'Processing' };
+      case 'PICKING_UP':
+        return { color: 'bg-sky-50 text-sky-600 border-sky-200', icon: Package, label: 'Picking Up' };
+      case 'IN_TRANSIT':
+        return { color: 'bg-indigo-50 text-indigo-600 border-indigo-200', icon: Truck, label: 'In Transit' };
       case 'SHIPPING':
         return { color: 'bg-purple-50 text-purple-600 border-purple-200', icon: Truck, label: 'Shipping' };
       case 'DELIVERED':
@@ -195,6 +224,10 @@ export default function OrderDetailsPage({ params }: { params: Promise<{ orderId
         return { color: 'bg-teal-50 text-teal-600 border-teal-200', icon: CheckCircle2, label: 'Complete' };
       case 'DISPUTED':
         return { color: 'bg-orange-50 text-orange-600 border-orange-200', icon: Scale, label: 'Disputed' };
+      case 'FAILED':
+        return { color: 'bg-red-50 text-red-600 border-red-200', icon: XCircle, label: 'Failed' };
+      case 'RETURNED':
+        return { color: 'bg-amber-50 text-amber-700 border-amber-200', icon: Truck, label: 'Returned' };
       case 'CANCELLED':
       case 'REJECTED':
         return { color: 'bg-red-50 text-red-600 border-red-200', icon: XCircle, label: 'Cancelled' };
@@ -203,12 +236,13 @@ export default function OrderDetailsPage({ params }: { params: Promise<{ orderId
     }
   };
 
-  const effectiveStatus = getEffectiveOrderStatus(order?.orderStatus || '', currentDispute?.status);
+  const effectiveStatus = getEffectiveOrderStatus(resolveDisplayStatus(), currentDispute?.status);
   const statusInfo = getStatusBadge(effectiveStatus);
   const StatusIcon = statusInfo.icon;
 
   const allTrackingLogs = useMemo(() => {
     const merged = [...trackingLogs];
+
     if (currentDispute) {
       merged.unshift({
         trackingId: `dispute-${currentDispute.disputeId}`,
@@ -246,9 +280,10 @@ export default function OrderDetailsPage({ params }: { params: Promise<{ orderId
   }
 
   const address = order.orderAddress || {};
+  const currentDisplayStatus = resolveDisplayStatus();
   const canCancel = order.orderStatus === 'NEW' || order.orderStatus === 'PENDING_VERIFICATION';
-  const canConfirm = order.orderStatus === 'DELIVERED';
-  const canDispute = canFileDispute(order.orderStatus, currentDispute);
+  const canConfirm = currentDisplayStatus === 'DELIVERED';
+  const canDispute = canFileDispute(currentDisplayStatus, currentDispute);
   const hasDispute = Boolean(currentDispute);
 
   return (
@@ -290,7 +325,7 @@ export default function OrderDetailsPage({ params }: { params: Promise<{ orderId
                 {currentDispute?.status && <div className="mt-3"><DisputeStatus status={currentDispute.status} /></div>}
               </div>
               <div className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold border ${statusInfo.color}`}>
-                <StatusIcon className="w-4 h-4" /> {statusInfo.label}
+                <StatusIcon className="w-4 h-4" /> {formatStatusLabel(statusInfo.label)}
               </div>
             </div>
 
@@ -314,7 +349,7 @@ export default function OrderDetailsPage({ params }: { params: Promise<{ orderId
                         <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-1">
                           <div>
                             <p className={`text-base font-bold ${isLatest ? 'text-slate-900' : 'text-slate-600'}`}>
-                              {log.displayStatus || 'Status Updated'}
+                              {formatStatusLabel(log.displayStatus) || 'Status Updated'}
                             </p>
                             <p className="text-sm font-medium text-slate-500 mt-1 leading-relaxed">
                               {log.description || 'No details'}

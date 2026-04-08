@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
 import { apiGet, apiPut } from '@/lib/api';
+import { loadManagedShops } from '@/lib/shop';
 import type { VerificationContextDTO, RiskLevel } from '@/types';
 import { 
   ClipboardList, Truck, CheckCircle2, XCircle, 
@@ -76,7 +77,7 @@ export default function ManagerOrdersPage() {
     const fetchShopAndOrders = async () => {
       setLoading(true);
       try {
-        const shopData = await apiGet<any[]>('shop', `/api/shops/owner/${storedUserId}`, { withUserId: false });
+        const shopData = await loadManagedShops(storedUserId, 'MANAGER');
         if (shopData && shopData.length > 0) {
           const currentShopId = shopData[0].shopId;
           setShopId(currentShopId);

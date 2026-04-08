@@ -187,7 +187,9 @@ export async function apiFetch<T = unknown>(
   // This prevents unnecessary CORS preflight for simple GET requests.
   const method = (restOptions.method || 'GET').toUpperCase();
   const hasBody = restOptions.body !== undefined && restOptions.body !== null;
-  if (hasBody && !('Content-Type' in headers)) {
+  const isFormData =
+    typeof FormData !== 'undefined' && restOptions.body instanceof FormData;
+  if (hasBody && !isFormData && !('Content-Type' in headers)) {
     headers['Content-Type'] = 'application/json';
   }
 
@@ -286,7 +288,9 @@ export async function apiFetchText(
 
   const method = (restOptions.method || 'GET').toUpperCase();
   const hasBody = restOptions.body !== undefined && restOptions.body !== null;
-  if (hasBody && !('Content-Type' in headers)) {
+  const isFormData =
+    typeof FormData !== 'undefined' && restOptions.body instanceof FormData;
+  if (hasBody && !isFormData && !('Content-Type' in headers)) {
     headers['Content-Type'] = 'application/json';
   }
 

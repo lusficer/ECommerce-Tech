@@ -6,6 +6,7 @@ import Link from 'next/link';
 import toast from 'react-hot-toast';
 import { apiGet, apiPut } from '@/lib/api';
 import { getAuth, getStoredRole, logout as clearAuth } from '@/lib/auth';
+import { loadManagedShops } from '@/lib/shop';
 import type { Shop, UpdateShopProfileRequest } from '@/types';
 import { 
   User, MapPin, Lock, Loader2, LogOut, ShieldCheck, EyeOff, Eye,
@@ -166,12 +167,7 @@ export default function ProfilePage() {
           normalized.includes('SHOP_MNG') ||
           userId.startsWith('SHOP_MNG');
 
-        const shops = isManagerLike
-          ? await apiGet<Shop[]>('shop', `/api/shops/owner/${userId}`, { withUserId: false })
-          : await apiGet<Shop[]>('shop', '/api/shops/my-assigned-shops', {
-              headers: { userId },
-              withUserId: false,
-            });
+        const shops = await loadManagedShops(userId, normalized);
         if (cancelled) return;
 
         const list = Array.isArray(shops) ? shops : [];

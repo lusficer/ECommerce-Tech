@@ -213,6 +213,24 @@ export interface ShipperAvailableOrderDTO {
   [key: string]: unknown;
 }
 
+export interface AvailableShipperDTO {
+  shipperId: string;
+  status?: string;
+  fullName?: string;
+  phone?: string;
+  [key: string]: unknown;
+}
+
+export type ShipperWorkStatus = 'AVAILABLE' | 'ON_DELIVERY' | 'UNAVAILABLE' | string;
+
+export interface ShipperStatusDTO {
+  status: ShipperWorkStatus;
+  unavailableReason?: string;
+  [key: string]: unknown;
+}
+
+export type DeliveryPhotoType = 'PICKING_UP' | 'DELIVERED' | 'FAILED' | 'RETURNED';
+
 export interface Review {
   reviewId: string;
   userId: string;

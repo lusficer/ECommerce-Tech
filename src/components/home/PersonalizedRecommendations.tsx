@@ -5,7 +5,8 @@ import { CheckCircle2, ChevronLeft, ChevronRight, Loader2, ShoppingCart, Sparkle
 import Link from 'next/link';
 import toast from 'react-hot-toast';
 
-import { apiGet, apiPost } from '@/lib/api';
+import { logout } from '@/lib/auth';
+import { apiGet, apiPost, isApiError } from '@/lib/api';
 import { formatCurrency } from '@/lib/format';
 
 type RecommendationSectionType =
@@ -242,6 +243,11 @@ export default function PersonalizedRecommendations() {
         );
         setData(result);
       } catch (error) {
+        if (isApiError(error) && (error.status === 401 || error.status === 403)) {
+          logout();
+          setHasToken(false);
+          return;
+        }
         console.error('Failed to load AI recommendations:', error);
       } finally {
         setLoading(false);

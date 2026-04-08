@@ -15,6 +15,7 @@ import {
 
 import { logout } from '@/lib/auth';
 import { apiGet, getUserFacingErrorMessage, isApiError } from '@/lib/api';
+import { loadManagedShops } from '@/lib/shop';
 
 export default function UnifiedAnalyticsDashboard() {
   const router = useRouter();
@@ -65,11 +66,7 @@ export default function UnifiedAnalyticsDashboard() {
   // Fetch shops for MANAGER
   const fetchManagerShops = async (userId: string, role: string) => {
     try {
-      const data = await apiGet<any[]>(
-        'shop',
-        `/api/shops/owner/${userId}`,
-        { withUserId: false }
-      );
+      const data = await loadManagedShops(userId, role);
       handleShopList(data, role, "You don't own any shops.");
     } catch (err) {
       if (isApiError(err) && (err.status === 401 || err.status === 403)) {
@@ -86,10 +83,7 @@ export default function UnifiedAnalyticsDashboard() {
   // Fetch shops for VENDOR
   const fetchVendorShops = async (userId: string, role: string) => {
     try {
-      const data = await apiGet<any[]>(
-        'shop',
-        '/api/shops/my-assigned-shops'
-      );
+      const data = await loadManagedShops(userId, role);
       handleShopList(data, role, 'You are not assigned to manage any shop.');
     } catch (err) {
       if (isApiError(err) && (err.status === 401 || err.status === 403)) {

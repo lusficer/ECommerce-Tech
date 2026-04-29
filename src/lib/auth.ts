@@ -28,6 +28,16 @@ export function getStoredRole(): string {
   return localStorage.getItem('role') || '';
 }
 
+export function inferRoleFromUserId(userId: string): string {
+  const normalized = (userId || '').trim().toUpperCase();
+  if (!normalized) return '';
+  if (normalized.startsWith('ADMIN')) return 'ADMIN';
+  if (normalized.startsWith('SHOP_MNG')) return 'SHOP_MANAGER';
+  if (normalized.startsWith('VEND')) return 'VENDOR';
+  if (normalized.startsWith('SHIPPER')) return 'SHIPPER';
+  return '';
+}
+
 // Used for role-based routing; returns an empty role on errors.
 export async function getUserRole(userId: string): Promise<string> {
   const { token } = getAuth();
@@ -53,4 +63,3 @@ export function logout(): void {
   // Also clear cross-page wishlist state.
   window.dispatchEvent(new Event('wishlistUpdated'));
 }
-

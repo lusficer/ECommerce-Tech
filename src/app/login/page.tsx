@@ -5,8 +5,8 @@ import Link from 'next/link';
 import { EyeOff, MonitorSmartphone, Loader2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
-import { apiPost, getUserFacingErrorMessage } from '@/lib/api';
-import { getUserRole } from '@/lib/auth';
+import { apiPost, getUserFacingErrorMessage, isApiError } from '@/lib/api';
+import { getUserRole, inferRoleFromUserId } from '@/lib/auth';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -34,9 +34,11 @@ export default function LoginPage() {
       if (data.userId) {
         localStorage.setItem('userId', data.userId);
 
-        // Store a real role for role-based routing.
+        // Prefer role inferred from ID prefix (project convention), then fallback to API role.
+        const inferredRole = inferRoleFromUserId(data.userId);
         const role = await getUserRole(data.userId);
-        if (role) localStorage.setItem('role', role);
+        const finalRole = inferredRole || role;
+        if (finalRole) localStorage.setItem('role', finalRole);
       }
 
       // Notify header/user menu to refresh immediately.
@@ -45,13 +47,23 @@ export default function LoginPage() {
       toast.success('Login successful! Redirecting...');
       router.push('/');
       
-    } catch (err: any) {
-      setError(
-        getUserFacingErrorMessage(err, {
-          context: 'login',
-          defaultMessage: 'Login failed. Please try again.',
-        })
-      );
+    } catch (err: unknown) {
+      if (
+        isApiError(err) &&
+        err.status === 403 &&
+        (err.error === 'ACCOUNT_BANNED' || err.message.startsWith('Account has been banned'))
+      ) {
+        const bannedMessage = err.message || 'Account has been banned.';
+        setError(bannedMessage);
+        toast.error(bannedMessage, { duration: 6000 });
+      } else {
+        setError(
+          getUserFacingErrorMessage(err, {
+            context: 'login',
+            defaultMessage: 'Login failed. Please try again.',
+          })
+        );
+      }
     } finally {
       setLoading(false);
     }

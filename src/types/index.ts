@@ -127,7 +127,12 @@ export interface Shop {
   warehouseWard?: string | null;
   warehousePhone?: string | null;
   createdAt?: string;
+  updatedAt?: string;
+  deactivatedAt?: string;
+  deactivationReason?: string;
   status?: string;
+  managerId?: string;
+  vendorId?: string;
   ownerId?: string;
 }
 

@@ -3,9 +3,9 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { User, Store, LogOut } from 'lucide-react';
+import { User, Store, LogOut, Shield } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { getAuth, logout } from '@/lib/auth';
+import { getAuth, inferRoleFromUserId, logout } from '@/lib/auth';
 import { apiGet } from '@/lib/api';
 
 function canAccessSellerPortal(userId: string, role: string): boolean {
@@ -26,6 +26,11 @@ function canAccessSellerPortal(userId: string, role: string): boolean {
   );
 }
 
+function isAdminRole(userId: string, role: string): boolean {
+  const normalizedRole = (role || '').trim().toUpperCase();
+  return normalizedRole === 'ADMIN' || inferRoleFromUserId(userId) === 'ADMIN';
+}
+
 export default function UserMenu() {
   const router = useRouter();
   const pathname = usePathname();
@@ -33,6 +38,7 @@ export default function UserMenu() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [userName, setUserName]     = useState('User');
   const [isManager, setIsManager]   = useState(false);
+  const [isAdmin, setIsAdmin]       = useState(false);
 
   useEffect(() => {
     setIsMounted(true);
@@ -51,6 +57,7 @@ export default function UserMenu() {
         if (cancelled) return;
         setIsLoggedIn(false);
         setIsManager(false);
+        setIsAdmin(false);
         setUserName('User');
         return;
       }
@@ -64,6 +71,7 @@ export default function UserMenu() {
 
       const cachedRole = localStorage.getItem('role') || '';
       setIsManager(canAccessSellerPortal(userId, cachedRole));
+      setIsAdmin(isAdminRole(userId, cachedRole));
 
       // Then fetch the latest account status.
       try {
@@ -79,10 +87,13 @@ export default function UserMenu() {
         }
 
         const resolvedRole = (data?.role || data?.profile?.role || '') as string;
-        if (resolvedRole) {
-          localStorage.setItem('role', resolvedRole);
+        const inferredRole = inferRoleFromUserId(userId);
+        const finalRole = inferredRole || resolvedRole || cachedRole;
+        if (finalRole) {
+          localStorage.setItem('role', finalRole);
         }
-        setIsManager(canAccessSellerPortal(userId, resolvedRole || cachedRole));
+        setIsManager(canAccessSellerPortal(userId, finalRole));
+        setIsAdmin(isAdminRole(userId, finalRole));
       } catch {
         // Silent – fallback to cached role/name.
       }
@@ -132,7 +143,20 @@ export default function UserMenu() {
           </div>
         </Link>
 
-        {isManager && (
+        {isAdmin && (
+          <>
+            <div className="h-6 w-px bg-slate-200 hidden md:block mx-1" />
+            <Link
+              href="/admin"
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-cyan-600 text-white rounded-lg hover:bg-cyan-700 transition-colors shadow-sm"
+            >
+              <Shield className="w-4 h-4" />
+              <span className="text-xs font-bold uppercase tracking-wider hidden md:block">Admin</span>
+            </Link>
+          </>
+        )}
+
+        {isManager && !isAdmin && (
           <>
             <div className="h-6 w-px bg-slate-200 hidden md:block mx-1" />
             <Link

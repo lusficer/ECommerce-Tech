@@ -17,6 +17,11 @@ public interface DisputeRepository extends JpaRepository<Dispute, String> {
     List<Dispute> findByUserId(String userId);
 
     /**
+     * Returns whether the user has any dispute history.
+     */
+    boolean existsByUserId(String userId);
+
+    /**
      * Finds a dispute by order id to check if a dispute already exists.
      */
     Optional<Dispute> findByOrderId(String orderId);

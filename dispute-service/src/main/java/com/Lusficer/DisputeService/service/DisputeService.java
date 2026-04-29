@@ -1,7 +1,10 @@
 package com.Lusficer.DisputeService.service;
 
+import com.Lusficer.DisputeService.client.NotificationClient;
+import com.Lusficer.DisputeService.dto.request.CreateNotificationRequest;
 import com.Lusficer.DisputeService.dto.*;
 import com.Lusficer.DisputeService.entity.*;
+import com.Lusficer.DisputeService.enums.NotificationType;
 import com.Lusficer.DisputeService.repository.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -22,6 +25,9 @@ public class DisputeService {
 
     @Autowired
     private DisputeActionLogRepository logRepository;
+
+    @Autowired
+    private NotificationClient notificationClient;
 
     /**
      * Creates a new dispute for a specific order.
@@ -49,6 +55,22 @@ public class DisputeService {
         }
         
         logAction(savedDispute.getDisputeId(), userId, "CREATE", "Dispute created");
+
+        // Notify shop manager about new dispute (best-effort)
+        try {
+            CreateNotificationRequest notif = CreateNotificationRequest.builder()
+                    .targetRole("MANAGER")
+                    .shopId(shopId)
+                    .type(NotificationType.NEW_DISPUTE_CREATED)
+                    .title("New Dispute Created")
+                    .message(String.format("A new dispute #%s was created and needs handling", savedDispute.getDisputeId()))
+                    .referenceId(savedDispute.getDisputeId())
+                    .referenceType("DISPUTE")
+                    .build();
+            notificationClient.createNotification(notif);
+        } catch (Exception e) {
+            System.err.println("Failed to send NEW_DISPUTE_CREATED notification: " + e.getMessage());
+        }
         return savedDispute;
     }
 
@@ -106,6 +128,21 @@ public class DisputeService {
         disputeRepository.save(dispute);
 
         logAction(disputeId, managerId, "REQUEST_INFO", requestMessage);
+
+        // Notify customer that more information is required (best-effort)
+        try {
+            CreateNotificationRequest notif = CreateNotificationRequest.builder()
+                    .userId(dispute.getUserId())
+                    .type(NotificationType.DISPUTE_NEEDS_INFO)
+                    .title("Additional Information Required")
+                    .message(String.format("Dispute #%s requires additional information: %s", disputeId, requestMessage))
+                    .referenceId(disputeId)
+                    .referenceType("DISPUTE")
+                    .build();
+            notificationClient.createNotification(notif);
+        } catch (Exception e) {
+            System.err.println("Failed to send DISPUTE_NEEDS_INFO notification: " + e.getMessage());
+        }
     }
 
     /**
@@ -129,6 +166,21 @@ public class DisputeService {
 
         disputeRepository.save(dispute);
         logAction(disputeId, request.getManagerId(), "RESOLVE", "Dispute resolved as " + request.getResolutionType());
+
+        // Notify customer that dispute has been resolved (best-effort)
+        try {
+            CreateNotificationRequest notif = CreateNotificationRequest.builder()
+                    .userId(dispute.getUserId())
+                    .type(NotificationType.DISPUTE_RESOLVED)
+                    .title("Dispute Resolved")
+                    .message(String.format("Dispute #%s has been resolved", disputeId))
+                    .referenceId(disputeId)
+                    .referenceType("DISPUTE")
+                    .build();
+            notificationClient.createNotification(notif);
+        } catch (Exception e) {
+            System.err.println("Failed to send DISPUTE_RESOLVED notification: " + e.getMessage());
+        }
     }
 
     /**

@@ -31,6 +31,9 @@ public class UserStatus {
     @Column(name = "isBanned")
     private Boolean isBanned;
 
+    @Column(name = "banReason", columnDefinition = "TEXT")
+    private String banReason;
+
     @Column(name = "lastLogin")
     private LocalDateTime lastLogin;
 }

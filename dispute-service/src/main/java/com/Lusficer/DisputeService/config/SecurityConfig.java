@@ -47,6 +47,7 @@ public class SecurityConfig {
                                "/webjars/**").permitAll()
                 .requestMatchers("/actuator/**").permitAll()
                 .requestMatchers("/api/public/**").permitAll()
+                .requestMatchers("/api/internal/**").permitAll()
                 .requestMatchers("/api/manager/**").authenticated()
                 .requestMatchers("/api/vendor/**").authenticated()
                 .anyRequest().authenticated()
@@ -56,7 +57,12 @@ public class SecurityConfig {
                 .authenticationEntryPoint((request, response, authException) -> {
                     response.setStatus(401);
                     response.setContentType("application/json");
-                    response.getWriter().write("{\"error\": \"Unauthorized - Please provide valid JWT token\"}");
+                    
+                    String jsonError = String.format(
+                        "{\"timestamp\":\"%s\",\"status\":401,\"error\":\"Unauthorized\",\"message\":\"Authentication required. Please provide valid JWT token.\"}",
+                        java.time.LocalDateTime.now()
+                    );
+                    response.getWriter().write(jsonError);
                 })
             );
 

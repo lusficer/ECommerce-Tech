@@ -9,5 +9,10 @@ public record UpdateShopProfileRequest(
         @NotBlank String shopName,
         @NotBlank String address,
         String description,
-        String logoUrl
+        String logoUrl,
+        String warehouseAddress,
+        String warehouseCity,
+        String warehouseDistrict,
+        String warehouseWard,
+        String warehousePhone
 ) {}

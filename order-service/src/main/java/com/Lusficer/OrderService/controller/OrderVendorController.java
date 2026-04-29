@@ -1,18 +1,20 @@
 package com.Lusficer.OrderService.controller;
 
-import com.Lusficer.OrderService.client.ShopClient;
+import com.Lusficer.OrderService.dto.request.AssignShipperRequest;
 import com.Lusficer.OrderService.dto.request.UpdateStatusRequest;
+import com.Lusficer.OrderService.dto.response.ShipperWithStatusDTO;
+import com.Lusficer.OrderService.dto.response.ShippingPhotoDTO;
+import com.Lusficer.OrderService.dto.response.ShippingResponseDTO;
 import com.Lusficer.OrderService.entity.Order;
-import com.Lusficer.OrderService.enums.OrderStatus;
-import com.Lusficer.OrderService.exception.UnauthorizedAccessException;
-import com.Lusficer.OrderService.repository.OrderRepository;
 import com.Lusficer.OrderService.service.OrderService;
+import com.Lusficer.OrderService.service.ShippingService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -25,46 +27,70 @@ import java.util.List;
 public class OrderVendorController {
 
     @Autowired private OrderService orderService;
-    @Autowired private OrderRepository orderRepository;
-    @Autowired private ShopClient shopClient;
+    @Autowired private ShippingService shippingService;
 
-    /**
-     * Returns orders for a shop after verifying vendor access.
-     */
-    @GetMapping("/{shopId}")
-    @Operation(summary = "Get orders for a specific shop")
-    public ResponseEntity<List<Order>> getShopOrders(
-            @RequestHeader("Vendor_Id") String vendorId, 
-            @PathVariable("shopId") String shopId,
-            @RequestParam(name = "status", required = false) String status){
-        boolean isAssigned = shopClient.checkVendorAccess(shopId, vendorId);
-        if (!isAssigned) {
-            throw new UnauthorizedAccessException("You do not have permission to view orders for this shop.");
-        }
-        
-        if (status != null && !status.isEmpty()) {
-            return ResponseEntity.ok(
-                orderRepository.findByShopIdAndOrderStatus(shopId, OrderStatus.valueOf(status))
-            );
-        }
-        return ResponseEntity.ok(orderRepository.findByShopIdOrderByCreatedAtDesc(shopId));
+    @GetMapping
+    @Operation(summary = "Get all orders across all shops of this vendor")
+    public ResponseEntity<List<Order>> getAllVendorOrders(
+            Authentication authentication,
+            @RequestParam(name = "status", required = false) String status) {
+        String vendorId = (String) authentication.getPrincipal();
+        return ResponseEntity.ok(orderService.getOrdersByVendor(vendorId, status));
     }
 
-    /**
-     * Updates order status after verifying vendor access.
-     */
+    @GetMapping("/shop/{shopId}")
+    @Operation(summary = "Get orders for a specific shop")
+    public ResponseEntity<List<Order>> getShopOrders(
+            Authentication authentication,
+            @PathVariable("shopId") String shopId,
+            @RequestParam(name = "status", required = false) String status) {
+        String vendorId = (String) authentication.getPrincipal();
+        return ResponseEntity.ok(orderService.getOrdersByShopForVendor(vendorId, shopId, status));
+    }
+
+    @GetMapping("/{orderId}/shipping-info")
+    @Operation(summary = "Get order detail with shipper info")
+    public ResponseEntity<?> getOrderShippingInfo(
+            Authentication authentication,
+            @PathVariable("orderId") String orderId) {
+        String vendorId = (String) authentication.getPrincipal();
+        return ResponseEntity.ok(orderService.getOrderShippingInfoForVendor(vendorId, orderId));
+    }
+
     @PutMapping("/{orderId}/status")
-    @Operation(summary = "Update order status (e.g., PROCESSING, READY_TO_SHIP)")
+    @Operation(summary = "Update order status")
     public ResponseEntity<Order> updateStatus(
-            @RequestHeader("Vendor_Id") String vendorId,
+            Authentication authentication,
             @PathVariable("orderId") String orderId,
             @RequestBody UpdateStatusRequest request) {
-        
-        boolean isAssigned = shopClient.checkVendorAccess(request.getShopId(), vendorId);
-        if (!isAssigned) {
-            throw new UnauthorizedAccessException("You do not have permission to update orders for this shop.");
-        }
+        String vendorId = (String) authentication.getPrincipal();
+        return ResponseEntity.ok(orderService.updateOrderStatusForVendor(vendorId, orderId, request));
+    }
 
-        return ResponseEntity.ok(orderService.updateOrderStatus(orderId, request));
+    @GetMapping("/shippers/available")
+    @Operation(summary = "Get list of available shippers")
+    public ResponseEntity<List<ShipperWithStatusDTO>> getAvailableShippers(
+            Authentication authentication) {
+        String vendorId = (String) authentication.getPrincipal();
+        return ResponseEntity.ok(orderService.getAvailableShippers(vendorId));
+    }
+
+    @PostMapping("/{orderId}/assign-shipper")
+    @Operation(summary = "Assign a shipper to an order")
+    public ResponseEntity<ShippingResponseDTO> assignShipper(
+            Authentication authentication,
+            @PathVariable("orderId") String orderId,
+            @RequestBody AssignShipperRequest request) {
+        String vendorId = (String) authentication.getPrincipal();
+        return ResponseEntity.ok(orderService.assignShipperToOrder(vendorId, orderId, request.getShipperId()));
+    }
+
+    @GetMapping("/{orderId}/photos")
+    @Operation(summary = "Get all delivery photos for an order")
+    public ResponseEntity<List<ShippingPhotoDTO>> getOrderPhotos(
+            Authentication authentication,
+            @PathVariable("orderId") String orderId) {
+        String vendorId = (String) authentication.getPrincipal();
+        return ResponseEntity.ok(shippingService.getPhotosByOrderForVendor(vendorId, orderId));
     }
 }

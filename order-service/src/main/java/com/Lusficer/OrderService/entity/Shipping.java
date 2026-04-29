@@ -23,9 +23,18 @@ public class Shipping {
     @Column(nullable = false, unique = true)
     private String orderId;
 
-    // Shipper identifier (for example: SHIPPER_001)
-    @Column(nullable = false)
+    // Shipper identifier (for example: SHIPPER_001) - may be null before shipper accepts
+    @Column(nullable = true)
     private String shipperId;
+
+    // Pickup (warehouse) address info
+    @Column(columnDefinition = "TEXT")
+    private String pickupAddress;
+
+    private String pickupCity;
+    private String pickupDistrict;
+    private String pickupWard;
+    private String pickupPhone;
 
     // Detailed shipping status
     @Enumerated(EnumType.STRING)

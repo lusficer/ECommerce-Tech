@@ -163,7 +163,7 @@ public class AccountController {
         content = @Content(mediaType = "application/json", schema = @Schema(implementation = com.Lusficer.UserService.dto.ApiError.class))
     )
     public ResponseEntity<DeactivateAccountResponse> requestDeactivation(
-            @PathVariable String userId,
+            @PathVariable("userId") String userId,
             @RequestBody @Valid DeactivateAccountRequest request) {
         return ResponseEntity.ok(accountService.requestDeactivation(userId, request));
     }
@@ -219,9 +219,9 @@ public class AccountController {
         content = @Content(mediaType = "application/json", schema = @Schema(implementation = com.Lusficer.UserService.dto.ApiError.class))
     )
     public ResponseEntity<DeactivateAccountResponse> approveDeactivation(
-            @PathVariable Long requestId,
-            @RequestParam String adminId,
-            @RequestParam(required = false, defaultValue = "Approved") String reason) {
+            @PathVariable("requestId") Long requestId,
+            @RequestParam("adminId") String adminId,
+            @RequestParam(name = "reason", required = false, defaultValue = "Approved") String reason) {
         return ResponseEntity.ok(accountService.approveDeactivation(requestId, adminId, reason));
     }
 
@@ -244,9 +244,9 @@ public class AccountController {
         content = @Content(mediaType = "application/json", schema = @Schema(implementation = com.Lusficer.UserService.dto.ApiError.class))
     )
     public ResponseEntity<DeactivateAccountResponse> rejectDeactivation(
-            @PathVariable Long requestId,
-            @RequestParam String adminId,
-            @RequestParam(required = false, defaultValue = "Rejected") String reason) {
+            @PathVariable("requestId") Long requestId,
+            @RequestParam("adminId") String adminId,
+            @RequestParam(name = "reason", required = false, defaultValue = "Rejected") String reason) {
         return ResponseEntity.ok(accountService.rejectDeactivation(requestId, adminId, reason));
     }
 }

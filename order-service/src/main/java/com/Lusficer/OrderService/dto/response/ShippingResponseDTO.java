@@ -13,5 +13,10 @@ public class ShippingResponseDTO {
     private String shipperId;
     private ShippingStatus status;
     private String note;
+    private String pickupAddress;
+    private String pickupCity;
+    private String pickupDistrict;
+    private String pickupWard;
+    private String pickupPhone;
     private LocalDateTime updatedAt;
 }

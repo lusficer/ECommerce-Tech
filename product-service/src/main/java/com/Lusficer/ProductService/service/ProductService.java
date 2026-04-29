@@ -1,12 +1,14 @@
 package com.Lusficer.ProductService.service;
 
 import com.Lusficer.ProductService.client.InventoryClient;
+import com.Lusficer.ProductService.client.NotificationClient;
 import com.Lusficer.ProductService.dto.*;
+import com.Lusficer.ProductService.dto.request.CreateNotificationRequest;
 import com.Lusficer.ProductService.dto.request.ProductRequestDTO;
 import com.Lusficer.ProductService.entity.*;
+import com.Lusficer.ProductService.enums.NotificationType;
 import com.Lusficer.ProductService.repository.*;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
@@ -26,6 +28,7 @@ public class ProductService {
     @Autowired private ProductRepository productRepository;
     @Autowired private ProductApprovalLogRepository logRepository;
     @Autowired private InventoryClient inventoryClient;
+    @Autowired private NotificationClient notificationClient;
 
     /**
      * Creates a new product for a shop and submits it for approval.
@@ -193,6 +196,35 @@ public class ProductService {
 
         productRepository.save(product);
         logRepository.save(log);
+
+        // Notifications (best-effort)
+        try {
+            if (reviewDTO.isApproved()) {
+                CreateNotificationRequest notif = CreateNotificationRequest.builder()
+                        .targetRole("VENDOR")
+                        .shopId(product.getShopId())
+                        .type(NotificationType.PRODUCT_APPROVED)
+                        .title("Product Approved")
+                        .message(String.format("Product '%s' has been approved", product.getName()))
+                        .referenceId(product.getProductId())
+                        .referenceType("PRODUCT")
+                        .build();
+                notificationClient.createNotification(notif);
+            } else {
+                CreateNotificationRequest notif = CreateNotificationRequest.builder()
+                        .targetRole("VENDOR")
+                        .shopId(product.getShopId())
+                        .type(NotificationType.PRODUCT_REJECTED)
+                        .title("Product Rejected")
+                        .message(String.format("Product '%s' has been rejected: %s", product.getName(), reviewDTO.getComments()))
+                        .referenceId(product.getProductId())
+                        .referenceType("PRODUCT")
+                        .build();
+                notificationClient.createNotification(notif);
+            }
+        } catch (Exception e) {
+            System.err.println("Failed to send product review notification: " + e.getMessage());
+        }
     }
 
     /**
@@ -315,12 +347,14 @@ public class ProductService {
      * Searches products by keyword for internal usage.
      */
     public List<ProductInternalDto> searchProductsInternal(String keyword) {
-        List<Product> products = productRepository.findByNameContainingIgnoreCaseAndApprovalStatusAndIsDeletedFalse(keyword, ApprovalStatus.APPROVED);
-        return products.stream()
-            .limit(5)
-            .map(this::mapToInternalDtoSimple)
-            .collect(Collectors.toList());
-    }
+    Pageable pageable = PageRequest.of(0, 10, Sort.by("soldCount").descending());
+    Page<Product> products = productRepository
+        .filterProducts(keyword, null, null, null, null, pageable);
+    
+    return products.getContent().stream()
+        .map(this::mapToInternalDtoSimple)
+        .collect(Collectors.toList());
+}
 
     private void mapDtoToEntity(ProductRequestDTO dto, Product entity) {
         entity.setName(dto.getName());

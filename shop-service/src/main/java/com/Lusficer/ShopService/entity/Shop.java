@@ -29,6 +29,26 @@ public class Shop {
     @Schema(description = "Address of the shop")
     private String address;
 
+    @Column(name = "warehouseAddress")
+    @Schema(description = "Warehouse address (fallback to shop address when null)")
+    private String warehouseAddress;
+
+    @Column(name = "warehouseCity")
+    @Schema(description = "Warehouse city")
+    private String warehouseCity;
+
+    @Column(name = "warehouseDistrict")
+    @Schema(description = "Warehouse district")
+    private String warehouseDistrict;
+
+    @Column(name = "warehouseWard")
+    @Schema(description = "Warehouse ward")
+    private String warehouseWard;
+
+    @Column(name = "warehousePhone")
+    @Schema(description = "Warehouse contact phone")
+    private String warehousePhone;
+
     @Column(name = "description")
     @Schema(description = "Description of the shop")
     private String description;
@@ -38,9 +58,13 @@ public class Shop {
     @Schema(description = "URL of the shop logo")
     private String logoUrl;
 
-    @Column(name = "ownerId")
-    @Schema(description = "Owner's user ID")
-    private String ownerId;
+    @Column(name = "managerId")
+    @Schema(description = "Manager's user ID")
+    private String managerId;
+
+    @Column(name = "vendorId")
+    @Schema(description = "Vendor's user ID")
+    private String vendorId;
 
     @Column(name = "status")
     @Schema(description = "Current status of the shop")
@@ -49,6 +73,10 @@ public class Shop {
     @Column(name = "deactivatedAt")
     @Schema(description = "Deactivation timestamp")
     private LocalDateTime deactivatedAt;
+
+    @Column(name = "deactivationReason", columnDefinition = "TEXT")
+    @Schema(description = "Reason for deactivation")
+    private String deactivationReason;
 
     @Column(name = "restoreUntil")
     @Schema(description = "Restoration deadline for deactivated shops")

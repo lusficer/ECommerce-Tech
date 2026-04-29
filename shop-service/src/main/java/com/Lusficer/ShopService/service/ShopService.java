@@ -2,83 +2,63 @@ package com.Lusficer.ShopService.service;
 
 import com.Lusficer.ShopService.dto.*;
 import com.Lusficer.ShopService.entity.Shop;
-import com.Lusficer.ShopService.entity.ShopVendorMapping;
 import com.Lusficer.ShopService.exception.ResourceNotFoundException;
 import com.Lusficer.ShopService.exception.BadRequestException;
 import com.Lusficer.ShopService.repository.ShopRepository;
-import com.Lusficer.ShopService.repository.ShopVendorMappingRepository;
 
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
-import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.stream.Collectors;
-import java.util.Optional;
+import java.util.UUID;
+
 @Service
 @RequiredArgsConstructor
 public class ShopService {
 
     private final ShopRepository shopRepo;
-    private final ShopVendorMappingRepository mappingRepo;
 
-    /**
-     * Returns all shops.
-     */
     public List<Shop> getAllShops() {
         return shopRepo.findAll();
     }
 
-    /**
-     * Returns a shop profile by shop id.
-     */
     public ShopProfileResponse getShopById(String shopId) {
         Shop shop = shopRepo.findById(shopId)
                 .orElseThrow(() -> new ResourceNotFoundException("Shop not found"));
-
-        return ShopProfileResponse.builder()
-                .shopId(shop.getShopId())
-                .shopName(shop.getShopName()) 
-                .address(shop.getAddress())
-                .description(shop.getDescription())
-                .logoUrl(shop.getLogoUrl())
-                .createdAt(shop.getCreatedAt()) 
-                .updatedAt(shop.getUpdatedAt())
-                .build();
+        return toProfileResponse(shop);
     }
 
-    /**
-     * Returns shops owned by a specific user.
-     */
-    public List<Shop> getShopsByOwner(String ownerId) {
-        return shopRepo.findByOwnerId(ownerId);
+    // Manager xem shops của mình
+    public List<Shop> getShopsByManager(String managerId) {
+        return shopRepo.findByManagerId(managerId);
     }
 
-    /**
-     * Searches shops by name or id keyword.
-     */
+    // Vendor xem shops của mình
+    public List<Shop> getShopsByVendor(String vendorId) {
+        return shopRepo.findByVendorId(vendorId);
+    }
+
     public List<Shop> searchShops(String keyword) {
         if (keyword == null || keyword.trim().isEmpty()) {
-            return List.of(); 
+            return List.of();
         }
         return shopRepo.findByShopNameContainingIgnoreCaseOrShopIdContainingIgnoreCase(keyword, keyword);
     }
 
-    /**
-     * Deactivates a shop and sets a restore window.
-     */
     @Transactional
     public DeactivateShopResponse deactivateShop(String shopId, String reason) {
         Shop shop = shopRepo.findById(shopId)
                 .orElseThrow(() -> new ResourceNotFoundException("Shop not found"));
 
+        // TODO: check pending orders từ order-service trước khi deactivate
         boolean hasPendingOrders = false;
-
         if (hasPendingOrders) {
-            throw new BadRequestException("Cannot delete shop with pending orders");
+            throw new BadRequestException("Cannot deactivate shop with pending orders");
         }
 
         shop.setStatus("DEACTIVATED");
@@ -86,8 +66,8 @@ public class ShopService {
         shop.setRestoreUntil(shop.getDeactivatedAt().plusDays(30));
         shopRepo.save(shop);
 
-        System.out.println("[MOCK NOTIFICATION] Sending to userId=" + shop.getOwnerId() + 
-                         ", reason: " + reason);
+        System.out.println("[MOCK NOTIFICATION] Sending to managerId=" + shop.getManagerId()
+                + ", reason: " + reason);
 
         return DeactivateShopResponse.builder()
                 .shopId(shopId)
@@ -97,116 +77,123 @@ public class ShopService {
                 .build();
     }
 
-    /**
-     * Assigns a vendor to a shop or reactivates an inactive mapping.
-     */
+    // Manager tạo shop — vendorId null, assign sau
     @Transactional
-    public void assignVendorToShop(String shopId, String vendorId) {
-        if (!shopRepo.existsById(shopId)) {
-            throw new ResourceNotFoundException("Shop not found");
+    public ShopProfileResponse createShop(UpdateShopProfileRequest req, String managerId) {
+        if (shopRepo.existsByManagerId(managerId)) {
+            throw new BadRequestException("Manager already manages a shop.");
         }
 
-        Optional<ShopVendorMapping> existingMapping = mappingRepo.findByShopIdAndVendorId(shopId, vendorId);
-        
-        if (existingMapping.isPresent()) {
-            ShopVendorMapping mapping = existingMapping.get();
-            if ("INACTIVE".equals(mapping.getStatus())) {
-                mapping.setStatus("ACTIVE"); 
-                mappingRepo.save(mapping);
-            }
-            return; 
-        }
-
-        ShopVendorMapping newMapping = ShopVendorMapping.builder()
-                .shopId(shopId)
-                .vendorId(vendorId)
-                .status("ACTIVE")
-                .build();
-        mappingRepo.save(newMapping);
-    }
-
-    /**
-     * Returns shops assigned to a vendor.
-     */
-    public List<Shop> getShopsAssignedToVendor(String vendorId) {
-        List<String> assignedShopIds = mappingRepo.findByVendorIdAndStatus(vendorId, "ACTIVE")
-                .stream()
-                .map(ShopVendorMapping::getShopId)
-                .collect(Collectors.toList());
-
-        return shopRepo.findAllById(assignedShopIds);
-    }
-
-    /**
-     * Creates a new shop for the owner.
-     */
-    @Transactional
-    public ShopProfileResponse createShop(UpdateShopProfileRequest req, String ownerId) {
-        List<Shop> existingShops = shopRepo.findByOwnerId(ownerId);
-        if (!existingShops.isEmpty()) {
-            throw new BadRequestException("Manager this already owns a shop. Only 1 shop allowed per manager.");
-        }
-
-        String generatedShopId = "SHP-" + java.util.UUID.randomUUID().toString().substring(0, 6).toUpperCase();
+        String generatedShopId = "SHP-" + UUID.randomUUID().toString().substring(0, 6).toUpperCase();
 
         Shop shop = Shop.builder()
                 .shopId(generatedShopId)
                 .shopName(req.shopName())
+                .managerId(managerId)
                 .address(req.address())
                 .description(req.description())
                 .logoUrl(req.logoUrl())
-                .ownerId(ownerId)
-                .status("ACTIVE") 
+                .warehouseAddress(req.warehouseAddress())
+                .warehouseCity(req.warehouseCity())
+                .warehouseDistrict(req.warehouseDistrict())
+                .warehouseWard(req.warehouseWard())
+                .warehousePhone(req.warehousePhone())
+                .status("ACTIVE")
                 .build();
 
         shopRepo.save(shop);
+        return toProfileResponse(shop);
+    }
 
+    // Admin hoặc Manager assign vendor vào shop sau khi tạo
+    @Transactional
+    public void assignVendorToShop(String shopId, String vendorId) {
+        Shop shop = shopRepo.findById(shopId)
+                .orElseThrow(() -> new ResourceNotFoundException("Shop not found"));
+        requireActiveShop(shop);
+
+        if (shop.getVendorId() != null) {
+            throw new BadRequestException(
+                "Shop already has vendor " + shop.getVendorId() + ". Remove current vendor first.");
+        }
+
+        shop.setVendorId(vendorId);
+        shopRepo.save(shop);
+    }
+
+    // Xóa vendor khỏi shop (trước khi assign vendor mới)
+    @Transactional
+    public void removeVendorFromShop(String shopId) {
+        Shop shop = shopRepo.findById(shopId)
+                .orElseThrow(() -> new ResourceNotFoundException("Shop not found"));
+        requireActiveShop(shop);
+
+        if (shop.getVendorId() == null) {
+            throw new BadRequestException("Shop does not have a vendor assigned.");
+        }
+
+        shop.setVendorId(null);
+        shopRepo.save(shop);
+    }
+
+    @Transactional
+    public ShopProfileResponse updateProfile(String shopId, UpdateShopProfileRequest req) {
+        Shop shop = shopRepo.findById(shopId)
+                .orElseThrow(() -> new ResourceNotFoundException("Shop not found"));
+        requireActiveShop(shop);
+
+        shop.setShopName(req.shopName());
+        shop.setAddress(req.address());
+        shop.setDescription(req.description());
+        shop.setLogoUrl(req.logoUrl());
+
+        if (req.warehouseAddress() != null) shop.setWarehouseAddress(req.warehouseAddress());
+        if (req.warehouseCity() != null)    shop.setWarehouseCity(req.warehouseCity());
+        if (req.warehouseDistrict() != null) shop.setWarehouseDistrict(req.warehouseDistrict());
+        if (req.warehouseWard() != null)    shop.setWarehouseWard(req.warehouseWard());
+        if (req.warehousePhone() != null)   shop.setWarehousePhone(req.warehousePhone());
+
+        shopRepo.save(shop);
+        return toProfileResponse(shop);
+    }
+
+    public boolean checkVendorBelongsToShop(String shopId, String vendorId) {
+        return shopRepo.existsByShopIdAndVendorId(shopId, vendorId);
+    }
+
+    // Dùng managerId thay vì ownerId
+    public boolean isOwner(String shopId, Authentication auth) {
+        String userId = (String) auth.getPrincipal(); // principal là String userId
+        return shopRepo.existsByShopIdAndManagerId(shopId, userId);
+    }
+
+    public ShopProfileResponse toProfileResponse(Shop shop) {
         return ShopProfileResponse.builder()
                 .shopId(shop.getShopId())
                 .shopName(shop.getShopName())
                 .address(shop.getAddress())
                 .description(shop.getDescription())
                 .logoUrl(shop.getLogoUrl())
-                .updatedAt(LocalDateTime.now())
+                .status(shop.getStatus())
+                .managerId(shop.getManagerId())
+                .vendorId(shop.getVendorId())
+                .warehouseAddress(shop.getWarehouseAddress())
+                .warehouseCity(shop.getWarehouseCity())
+                .warehouseDistrict(shop.getWarehouseDistrict())
+                .warehouseWard(shop.getWarehouseWard())
+                .warehousePhone(shop.getWarehousePhone())
+                .deactivatedAt(shop.getDeactivatedAt())
+                .deactivationReason(shop.getDeactivationReason())
+                .createdAt(shop.getCreatedAt())
+                .updatedAt(shop.getUpdatedAt())
                 .build();
     }
 
-    /**
-     * Updates shop profile fields.
-     */
-    @Transactional
-    public ShopProfileResponse updateProfile(String shopId, UpdateShopProfileRequest req) {
-        Shop shop = shopRepo.findById(shopId)
-                .orElseThrow(() -> new ResourceNotFoundException("Shop not found"));
-
-        shop.setShopName(req.shopName());
-        shop.setAddress(req.address());
-        shop.setDescription(req.description());
-        shop.setLogoUrl(req.logoUrl());
-        shopRepo.save(shop);
-
-        return ShopProfileResponse.builder()
-                .shopId(shopId)
-                .shopName(shop.getShopName())
-                .address(shop.getAddress())
-                .description(shop.getDescription())
-                .logoUrl(shop.getLogoUrl())
-                .updatedAt(LocalDateTime.now())
-                .build();
-    }
-
-    /**
-     * Checks whether a vendor is active in a shop.
-     */
-    public boolean checkVendorBelongsToShop(String shopId, String vendorId) {
-        return mappingRepo.existsByShopIdAndVendorIdAndStatus(shopId, vendorId, "ACTIVE");
-    }
-
-    /**
-     * Checks whether the authenticated user is the shop owner.
-     */
-    public boolean isOwner(String shopId, Authentication auth) {
-        String userId = ((UserDetails) auth.getPrincipal()).getUsername();
-        return shopRepo.existsByShopIdAndOwnerId(shopId, userId);
+    private void requireActiveShop(Shop shop) {
+        if (!"ACTIVE".equals(shop.getStatus())) {
+            throw new ResponseStatusException(
+                    HttpStatus.FORBIDDEN,
+                    "Shop is DEACTIVATED. Operation not allowed. Contact admin to restore.");
+        }
     }
 }

@@ -11,6 +11,8 @@ import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+
+import org.springframework.security.core.Authentication;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
@@ -46,19 +48,6 @@ public class ShopController {
     @Operation(summary = "Get shop by ID", description = "Retrieve a specific shop profile for customers")
     public ResponseEntity<ShopProfileResponse> getShopById(@PathVariable("shopId") String shopId) {
         return ResponseEntity.ok(shopService.getShopById(shopId));
-    }
-
-    /**
-     * Lists shops owned by a specific owner.
-     */
-    @GetMapping("/owner/{ownerId}")
-    @PreAuthorize("hasRole('ADMIN') or hasRole('SHOP_MANAGER')")
-    @Operation(summary = "Get shops by owner", description = "Retrieve shops that belong to a specific owner/userId")
-    @ApiResponse(responseCode = "200", description = "Successfully retrieved owner's shops",
-        content = @Content(schema = @Schema(implementation = Shop.class)))
-    public ResponseEntity<List<Shop>> getShopsByOwner(@PathVariable("ownerId") String ownerId) {
-        List<Shop> shops = shopService.getShopsByOwner(ownerId);
-        return ResponseEntity.ok(shops);
     }
 
     /**
@@ -98,35 +87,49 @@ public class ShopController {
     @PreAuthorize("hasRole('SHOP_MANAGER')")
     @Operation(summary = "Create a new shop", description = "Creates a new shop. Strictly limited to 1 shop per manager.")
     public ResponseEntity<ShopProfileResponse> createShop(
-            @RequestParam("ownerId") String ownerId, 
-            @RequestBody @Valid UpdateShopProfileRequest request) {
-        
-        if (ownerId == null || ownerId.trim().isEmpty()) {
-            throw new IllegalArgumentException("ownerId must not be empty.");
-        }
+        Authentication authentication,
+        @RequestBody @Valid UpdateShopProfileRequest request) {
 
-        ShopProfileResponse response = shopService.createShop(request, ownerId);
-        return ResponseEntity.ok(response);
+    String managerId = authentication.getName(); 
+    ShopProfileResponse response = shopService.createShop(request, managerId);
+    return ResponseEntity.ok(response);
     }
-
     /**
      * Assigns a vendor to a shop.
      */
     @PostMapping("/{shopId}/vendors/{vendorId}")
+    @PreAuthorize("hasRole('ADMIN') or (hasRole('SHOP_MANAGER') and @shopService.isOwner(#shopId, authentication))")
+    @Operation(summary = "Assign vendor to shop")
     public ResponseEntity<String> assignVendorToShop(
-            @PathVariable("shopId") String shopId, 
+            @PathVariable("shopId") String shopId,
             @PathVariable("vendorId") String vendorId) {
         shopService.assignVendorToShop(shopId, vendorId);
-        return ResponseEntity.ok("Assigned vendor " + vendorId + " to shop " + shopId + " successfully.");
+        return ResponseEntity.ok("Vendor " + vendorId + " assigned to shop " + shopId);
+    }
+
+    @GetMapping("/my-managed-shops")
+    @PreAuthorize("hasRole('SHOP_MANAGER')")
+    @Operation(summary = "Get shops managed by current manager")
+    public ResponseEntity<List<ShopProfileResponse>> getMyManagedShops(Authentication auth) {
+        String managerId = auth.getName();
+        List<ShopProfileResponse> shops = shopService.getShopsByManager(managerId)
+                .stream()
+                .map(shopService::toProfileResponse)
+                .toList();
+        return ResponseEntity.ok(shops);
     }
 
     /**
-     * Lists shops assigned to the vendor.
-     */
+      * Lists shops assigned to the vendor.
+      */
     @GetMapping("/my-assigned-shops")
-    public ResponseEntity<List<Shop>> getMyAssignedShops(
-            @RequestHeader("userId") String vendorId) {
-        return ResponseEntity.ok(shopService.getShopsAssignedToVendor(vendorId));
+    public ResponseEntity<List<ShopProfileResponse>> getMyAssignedShops(Authentication authentication) {
+    String vendorId = authentication.getName();
+    List<ShopProfileResponse> shops = shopService.getShopsByVendor(vendorId)
+            .stream()
+            .map(shopService::toProfileResponse)
+            .toList();
+    return ResponseEntity.ok(shops);
     }
 
     /**

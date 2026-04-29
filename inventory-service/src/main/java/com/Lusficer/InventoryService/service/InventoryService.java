@@ -1,9 +1,13 @@
 package com.Lusficer.InventoryService.service;
 
+import com.Lusficer.InventoryService.client.NotificationClient;
+import com.Lusficer.InventoryService.client.ProductClient;
+import com.Lusficer.InventoryService.dto.ProductDto;
 import com.Lusficer.InventoryService.entity.*;
 import com.Lusficer.InventoryService.repository.*;
 import com.Lusficer.InventoryService.dto.response.InventoryResponse;
-import com.Lusficer.InventoryService.dto.request.StockRequest; 
+import com.Lusficer.InventoryService.dto.request.CreateNotificationRequest;
+import com.Lusficer.InventoryService.enums.NotificationType;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -20,6 +24,8 @@ public class InventoryService {
     @Autowired private InventoryRepository inventoryRepo;
     @Autowired private ReservationRepository reservationRepo;
     @Autowired private StockLogRepository logRepo;
+    @Autowired private ProductClient productClient;
+    @Autowired private NotificationClient notificationClient;
 
     /**
      * Reserves stock for an order with 15-minute expiry.
@@ -70,6 +76,31 @@ public class InventoryService {
             reservationRepo.delete(res);
 
             saveLog(res.getProductId(), orderId, StockLog.LogType.CONFIRM_SALE, -res.getQuantity(), inventory.getQuantity(), "Sold");
+
+            // LOW_STOCK_WARNING (best-effort)
+            try {
+                int available = (inventory.getQuantity() == null ? 0 : inventory.getQuantity())
+                        - (inventory.getReservedQuantity() == null ? 0 : inventory.getReservedQuantity());
+                Integer safety = inventory.getSafetyStockLevel();
+                if (safety != null && available <= safety) {
+                    ProductDto product = productClient.getProductById(res.getProductId());
+                    if (product != null && product.getShopId() != null && !product.getShopId().isEmpty()) {
+                        String productName = product.getName() != null ? product.getName() : res.getProductId();
+                        CreateNotificationRequest notif = CreateNotificationRequest.builder()
+                                .targetRole("VENDOR")
+                                .shopId(product.getShopId())
+                                .type(NotificationType.LOW_STOCK_WARNING)
+                                .title("Low Stock Warning")
+                                .message(String.format("Product '%s' is low on stock (available: %d)", productName, available))
+                                .referenceId(res.getProductId())
+                                .referenceType("INVENTORY")
+                                .build();
+                        notificationClient.createNotification(notif);
+                    }
+                }
+            } catch (Exception e) {
+                System.err.println("Failed to send LOW_STOCK_WARNING notification: " + e.getMessage());
+            }
         }
     }
 

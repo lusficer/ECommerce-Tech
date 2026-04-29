@@ -26,12 +26,13 @@ public interface ProductRepository extends JpaRepository<Product, String> {
               String keyword, 
               ApprovalStatus status);    
     @Query("SELECT p FROM Product p WHERE p.isDeleted = false " +
-           "AND p.approvalStatus = 'APPROVED' " +
-           "AND (:keyword IS NULL OR LOWER(p.name) LIKE LOWER(CONCAT('%', :keyword, '%'))) " +
-           "AND (:categoryId IS NULL OR p.categoryId = :categoryId) " +
-           "AND (:brand IS NULL OR LOWER(p.name) LIKE LOWER(CONCAT('%', :brand, '%'))) " +
-           "AND (:minPrice IS NULL OR (p.price * (1.0 - (COALESCE(p.discountPercentage, 0) / 100.0))) >= :minPrice) " +
-           "AND (:maxPrice IS NULL OR (p.price * (1.0 - (COALESCE(p.discountPercentage, 0) / 100.0))) <= :maxPrice)")
+       "AND p.approvalStatus = 'APPROVED' " +
+       "AND (:keyword IS NULL OR LOWER(p.name) LIKE LOWER(CONCAT('%', :keyword, '%')) " +
+       "     OR LOWER(p.brand) LIKE LOWER(CONCAT('%', :keyword, '%'))) " +
+       "AND (:categoryId IS NULL OR p.categoryId = :categoryId) " +
+       "AND (:brand IS NULL OR LOWER(p.brand) LIKE LOWER(CONCAT('%', :brand, '%'))) " +
+       "AND (:minPrice IS NULL OR (p.price * (1.0 - (COALESCE(p.discountPercentage, 0) / 100.0))) >= :minPrice) " +
+       "AND (:maxPrice IS NULL OR (p.price * (1.0 - (COALESCE(p.discountPercentage, 0) / 100.0))) <= :maxPrice)")
     org.springframework.data.domain.Page<Product> filterProducts(
                                  @Param("keyword") String keyword,
                                  @Param("categoryId") String categoryId,

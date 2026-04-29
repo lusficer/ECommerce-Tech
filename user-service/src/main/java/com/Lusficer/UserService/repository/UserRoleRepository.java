@@ -19,6 +19,11 @@ public interface UserRoleRepository extends JpaRepository<UserRole, String> {
     List<UserRole> findAllByUserId(String userId);
     
     /**
+     * Finds all users with a specific role.
+     */
+    List<UserRole> findByRoleName(UserRole.RoleName roleName);
+    
+    /**
      * Deletes roles for a user.
      */
     void deleteByUserId(String userId);

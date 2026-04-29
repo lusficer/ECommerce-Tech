@@ -10,6 +10,16 @@ public record ShopProfileResponse(
         String address,
         String description,
         String logoUrl,
+        String status,
+        String managerId,
+        String vendorId,
+        String warehouseAddress,
+        String warehouseCity,
+        String warehouseDistrict,
+        String warehouseWard,
+        String warehousePhone,
+        LocalDateTime deactivatedAt,
+        String deactivationReason,
         LocalDateTime createdAt,
         LocalDateTime updatedAt
 ) {}

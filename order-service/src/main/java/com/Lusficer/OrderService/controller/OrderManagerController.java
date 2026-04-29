@@ -1,6 +1,7 @@
 package com.Lusficer.OrderService.controller;
 
 import com.Lusficer.OrderService.dto.request.VerifyOrderRequest;
+import com.Lusficer.OrderService.dto.response.VerificationContextDTO;
 import com.Lusficer.OrderService.entity.Order;
 import com.Lusficer.OrderService.enums.OrderStatus;
 import com.Lusficer.OrderService.repository.OrderRepository;
@@ -64,5 +65,14 @@ public class OrderManagerController {
         
         request.setManagerId(managerId);
         return ResponseEntity.ok(orderService.verifyOrder(orderId, request));
+    }
+
+    /**
+     * Returns verification context (payment + fraud signals) to support manager decisions.
+     */
+    @GetMapping("/{orderId}/verification-context")
+    @Operation(summary = "Get verification context for an order")
+    public ResponseEntity<VerificationContextDTO> getVerificationContext(@PathVariable("orderId") String orderId) {
+        return ResponseEntity.ok(orderService.getVerificationContext(orderId));
     }
 }

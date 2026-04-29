@@ -57,7 +57,12 @@ public class SecurityConfig {
                 .authenticationEntryPoint((request, response, authException) -> {
                     response.setStatus(401);
                     response.setContentType("application/json");
-                    response.getWriter().write("{\"error\": \"Unauthorized\"}");
+                    
+                    String jsonError = String.format(
+                        "{\"timestamp\":\"%s\",\"status\":401,\"error\":\"Unauthorized\",\"message\":\"Authentication required. Please provide valid JWT token.\"}",
+                        java.time.LocalDateTime.now()
+                    );
+                    response.getWriter().write(jsonError);
                 })
             );
 

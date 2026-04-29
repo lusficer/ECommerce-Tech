@@ -9,6 +9,7 @@ import com.Lusficer.UserService.dto.response.RegistrationResponse;
 import com.Lusficer.UserService.entity.UserProfile;
 import com.Lusficer.UserService.entity.UserRole;
 import com.Lusficer.UserService.entity.UserStatus;
+import com.Lusficer.UserService.exception.AccountBannedException;
 import com.Lusficer.UserService.repository.UserAuthRepository;
 import com.Lusficer.UserService.repository.UserProfileRepository;
 import com.Lusficer.UserService.repository.UserRoleRepository;
@@ -32,6 +33,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -57,7 +59,7 @@ public class AuthController {
      * Allows 5 attempts per 15 minutes per IP address.
      */
     private Bucket createNewBucket() {
-        Bandwidth limit = Bandwidth.classic(5, Refill.greedy(5, Duration.ofMinutes(15)));
+        Bandwidth limit = Bandwidth.classic(10, Refill.greedy(5, Duration.ofMinutes(15)));
         return Bucket.builder().addLimit(limit).build();
     }
 
@@ -73,18 +75,43 @@ public class AuthController {
         Bucket bucket = cache.computeIfAbsent(ip, k -> createNewBucket());
 
         if (!bucket.tryConsume(1)) {
-            return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
-                    .body(Map.of("error", "Too many login attempts. Please try again after 15 minutes."));
+            Map<String, Object> errorBody = new HashMap<>();
+            errorBody.put("timestamp", LocalDateTime.now());
+            errorBody.put("status", 429);
+            errorBody.put("error", "Too Many Requests");
+            errorBody.put("message", "Too many login attempts. Please try again after 15 minutes.");
+            return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS).body(errorBody);
         }
 
-        Authentication auth = authenticationManager.authenticate(
-                new UsernamePasswordAuthenticationToken(req.email(), req.password())
-        );
-        String jwt = jwtTokenProvider.generateToken(auth);
-        UserProfile user = profileRepo.findByEmail(req.email())
-            .orElseThrow(() -> new RuntimeException("User not found"));
-            
-        return ResponseEntity.ok(new LoginResponse(jwt, user.getUserId()));
+        try {
+            Authentication auth = authenticationManager.authenticate(
+                    new UsernamePasswordAuthenticationToken(req.email(), req.password())
+            );
+            UserProfile user = profileRepo.findByEmail(req.email())
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+            statusRepo.findById(user.getUserId()).ifPresent(status -> {
+                if (Boolean.TRUE.equals(status.getIsBanned())) {
+                    String reason = status.getBanReason();
+                    String message = (reason == null || reason.isBlank())
+                            ? "Account has been banned. Please contact support."
+                            : "Account has been banned. Reason: " + reason;
+                    throw new AccountBannedException(message);
+                }
+            });
+
+            String jwt = jwtTokenProvider.generateToken(auth);
+                 
+            return ResponseEntity.ok(new LoginResponse(jwt, user.getUserId()));
+        } catch (org.springframework.security.core.AuthenticationException e) {
+            // BadCredentialsException, DisabledException, LockedException, etc.
+            Map<String, Object> errorBody = new HashMap<>();
+            errorBody.put("timestamp", LocalDateTime.now());
+            errorBody.put("status", 400);
+            errorBody.put("error", "Bad Request");
+            errorBody.put("message", "Email hoặc mật khẩu không đúng");
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(errorBody);
+        }
     }
 
     /**

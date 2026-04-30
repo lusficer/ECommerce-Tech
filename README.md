@@ -30,7 +30,7 @@ This project implements a scalable e-commerce system using Spring Cloud microser
 
 - **Inventory Service**
   - Tracks stock levels, reservations and stock adjustments.
-  - Coordinates with `order-service` and `fulfillment-service` to guarantee availability.
+  - Coordinates with `order-service` to guarantee availability.
   - Suitable for using a fast datastore or cache for real-time quantity checks.
 
 - **Cart Service**
@@ -42,10 +42,6 @@ This project implements a scalable e-commerce system using Spring Cloud microser
   - Handles order placement, order lifecycle (created, paid, canceled), and order history.
   - Integrates with payment provider placeholders and emits events for downstream processing.
   - Uses a durable relational store for transactional consistency.
-
-- **Fulfillment Service**
-  - Orchestrates packing, shipment creation, and fulfillment status updates.
-  - Listens to order events and coordinates with inventory and shipping partners.
 
 - **Recommendation Service**
   - Provides personalized or item-based product recommendations.
@@ -128,9 +124,6 @@ cd ../cart-service
 mvn spring-boot:run -Dspring-boot.run.profiles=dev
 
 cd ../recommendation-service
-mvn spring-boot:run -Dspring-boot.run.profiles=dev
-
-cd ../fulfillment-service
 mvn spring-boot:run -Dspring-boot.run.profiles=dev
 ```
 

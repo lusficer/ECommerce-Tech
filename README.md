@@ -136,6 +136,7 @@ mvn spring-boot:run -Dspring-boot.run.profiles=dev
 Notes:
 - Always check each service's `src/main/resources/application.yml` to confirm configured ports and datasource settings before running.
 - Running many services locally may require additional memory; consider starting only the services you are actively developing.
+- For Swagger aggregation through gateway, docs are served via `/service-docs/<service-name>` (for example `/service-docs/user-service`).
 
 ### Accessing Services
 
@@ -170,6 +171,17 @@ Each service has its own configuration in `src/main/resources/application.yml`. 
 - Eureka client settings
 - Database connections (where applicable)
 - API documentation paths
+
+### API Gateway network/IP note
+
+Current `api-gateway/src/main/resources/application.yml` is configured to reduce machine/network mismatch issues:
+
+- `spring.cloud.gateway.globalcors.cors-configurations.[/**].allowedOriginPatterns` (allows localhost and common LAN ranges)
+- `springdoc.swagger-ui.urls[*].url` uses gateway-local paths (`/service-docs/<service-name>`) instead of direct `localhost:<port>` links
+
+Important limitation:
+- Swagger "Try it out" may still call service URLs like `http://localhost:<port>` if those URLs are emitted by downstream service OpenAPI `servers`, which can fail from another machine.
+- If you need remote browser testing, override downstream OpenAPI `servers` to gateway-facing URLs.
 
 ### API Documentation
 

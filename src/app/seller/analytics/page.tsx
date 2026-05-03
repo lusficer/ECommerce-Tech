@@ -199,7 +199,7 @@ export default function UnifiedAnalyticsDashboard() {
   }
 
   // Customize back link based on role
-  const backLinkUrl = userRole.includes('MANAGER') ? '/manager/dashboard' : '/vendor/dashboard';
+  const backLinkUrl = '/seller';
 
   return (
     <div className="min-h-screen bg-slate-50 font-sans pb-12">
